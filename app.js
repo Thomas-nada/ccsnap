@@ -1,3 +1,7 @@
+/* ----------------------------------------------------
+   Field Builders
+---------------------------------------------------- */
+
 function field(label, name, type="text", help="", required=false) {
   return `
     <label>${label}${required ? " *" : ""}</label>
@@ -17,6 +21,10 @@ function textarea(label, name, help="", required=false) {
 function polOptOut(text, name) {
   return `<label class="checkbox-row"><input type="checkbox" name="${name}" /> ${text}</label>`;
 }
+
+/* ----------------------------------------------------
+   Dynamic Form Builder
+---------------------------------------------------- */
 
 function updateForm() {
   const type = document.getElementById("type").value;
@@ -44,7 +52,7 @@ function updateForm() {
     `;
   }
 
-  /* ---------- Company ---------- */
+  /* ---------- Company / Organisation ---------- */
   if (type === "company") {
     container.innerHTML = `
       <div class="section">
@@ -79,6 +87,10 @@ function updateForm() {
   }
 }
 
+/* ----------------------------------------------------
+   Add Consortium Member
+---------------------------------------------------- */
+
 function addMember() {
   const container = document.getElementById("members");
   const i = container.children.length + 1;
@@ -88,6 +100,7 @@ function addMember() {
 
   block.innerHTML = `
     <h4>Member ${i}</h4>
+
     ${field("Name", `member_${i}_name`, "text", "", true)}
     ${field("Geographical Representation (optional)", `member_${i}_geo`)}
     ${textarea("Biography", `member_${i}_bio`, "", true)}
@@ -102,5 +115,51 @@ function addMember() {
   container.appendChild(block);
 }
 
-/* Auto-init */
+/* ----------------------------------------------------
+   Submit to Google Sheets
+---------------------------------------------------- */
+
+const GOOGLE_WEBHOOK_URL =
+  "https://script.google.com/macros/s/AKfycbz-k2SUaIh9szCFOQNtvK0k9i8XuH3Z-KyKqYCjIA2sxsO9fJIv3SjkjHjvHCdtgE5H/exec";
+
+document.getElementById("signupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const type = document.getElementById("type").value;
+  const formData = new FormData(e.target);
+  let dataObj = {};
+
+  for (const [key, value] of formData.entries()) {
+    dataObj[key] = value;
+  }
+
+  const payload = {
+    type,
+    data: dataObj
+  };
+
+  try {
+    const res = await fetch(GOOGLE_WEBHOOK_URL, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" }
+    });
+
+    const json = await res.json();
+
+    alert("Your application has been submitted successfully!");
+
+    e.target.reset();
+    document.getElementById("dynamicFields").innerHTML = "";
+
+  } catch (err) {
+    console.error(err);
+    alert("There was an error submitting your form.");
+  }
+});
+
+/* ----------------------------------------------------
+   Initialize
+---------------------------------------------------- */
+
 document.getElementById("type").addEventListener("change", updateForm);
