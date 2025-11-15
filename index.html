@@ -1,1053 +1,147 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  query, 
-  onSnapshot, 
-  serverTimestamp,
-  doc, 
-  setDoc,
-  setLogLevel
-} from 'firebase/firestore';
-import { 
-  Users, Mail, Globe, Briefcase, Link, Camera, BookOpen, AlertTriangle, 
-  Loader2, List, X, Info, Building2, Combine, Plus, ChevronDown, ChevronUp, CheckCircle
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Constitutional Committee Sign-Up</title>
 
-// --- Demo Environment Configuration ---
-// These variables are injected by the execution environment and guarantee function in the preview window.
-const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+  <style>
+    body {
+      font-family: "Inter", sans-serif;
+      background: #eef1f4;
+      margin: 0;
+      padding: 40px;
+      color: #222;
+    }
 
-// Consolidated collection path for all CC applications
-const PUBLIC_COLLECTION_PATH = `artifacts/${appId}/public/data/cc_applications`; 
-// --- End Demo Configuration ---
+    h1 {
+      text-align: center;
+      font-size: 2.4rem;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    p.subtitle {
+      text-align: center;
+      font-size: 1.1rem;
+      color: #555;
+      margin-bottom: 30px;
+    }
 
+    .card {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 35px;
+      border-radius: 18px;
+      box-shadow: 0 6px 30px rgba(0,0,0,0.07);
+    }
 
-// Utility to format Firestore timestamp
-const formatTimestamp = (timestamp) => {
-  if (!timestamp) return 'N/A';
-  // Check if it's a Firestore Timestamp object or already a Date
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+    label {
+      font-weight: 600;
+      display: block;
+      margin-top: 20px;
+    }
 
-// Component for a styled field description/tooltip
-const FieldDescription = ({ children }) => (
-  <div className="flex items-start mt-1 text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200">
-    <Info className="w-4 h-4 mr-2 flex-shrink-0 text-indigo-400 mt-0.5" />
-    <span className="italic">{children}</span>
+    input, textarea, select {
+      width: 100%;
+      padding: 12px;
+      margin-top: 6px;
+      border: 1px solid #cfd6dd;
+      border-radius: 8px;
+      background: #fafafa;
+      font-size: 1rem;
+      transition: border 0.2s;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #4a90e2;
+      background: #fff;
+      outline: none;
+    }
+
+    .section {
+      margin-top: 35px;
+      padding: 25px;
+      background: #f7f9fb;
+      border-radius: 12px;
+      border: 1px solid #e2e4e7;
+    }
+
+    .member-block {
+      padding: 20px;
+      border-radius: 12px;
+      background: #ffffff;
+      border: 1px solid #dfe3e7;
+      margin-top: 15px;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    button {
+      margin-top: 30px;
+      padding: 14px 26px;
+      background: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s background;
+    }
+    button:hover {
+      background: #3578c8;
+    }
+
+    #disclaimer {
+      margin-top: 30px;
+      background: #fff7e0;
+      border-left: 5px solid #dba500;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      color: #5a4b20;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Constitutional Committee Sign-Up</h1>
+<p class="subtitle">Register as an Individual, Organisation, or Consortium.</p>
+
+<div class="card">
+<form id="signupForm">
+
+  <label for="type">Registration Type</label>
+  <select id="type" name="type" required>
+    <option value="">-- Select --</option>
+    <option value="individual">Individual</option>
+    <option value="company">Company / Organisation</option>
+    <option value="consortium">Consortium</option>
+  </select>
+
+  <div id="dynamicFields"></div>
+
+  <button type="submit">Submit Application</button>
+
+  <div id="disclaimer">
+    <strong>This application form is administered by Intersect MBO for the Constitutional Committee snap election.</strong>
+    Information submitted may be reviewed, verified, and publicly published to support election transparency and
+    community oversight. By submitting this application, you acknowledge that all information provided is accurate to
+    the best of your knowledge and consent to its use for governance, verification, and publication purposes.
+    Submission does not guarantee placement in the Constitutional Committee. For official updates, follow
+    @IntersectMBO across verified channels.
   </div>
-);
 
-// Component for the Proof-of-Life Exemption Warning
-const ExemptionWarning = ({ isExempt }) => (
-    <div className={`mt-2 p-2 rounded-lg transition-all duration-300 overflow-hidden ${isExempt ? 'opacity-100 bg-yellow-50 border border-yellow-200 h-auto' : 'opacity-0 h-0 p-0'}`}>
-      <p className="text-xs text-yellow-700 italic">
-        *Exemption applied. If the previous information is non-verifiable or incorrect, follow-up may be required.
-      </p>
-    </div>
-);
+</form>
+</div>
 
-
-// --- Detailed Application View Component ---
-const DetailedApplicationView = ({ app, isExpanded }) => {
-    if (!isExpanded) return null;
-
-    const dataPoints = [];
-
-    // Shared Helper function for data display
-    const addData = (label, value, isOptional = false, isLink = false) => {
-        if (value && String(value).trim() !== '') {
-            dataPoints.push({ label, value, isOptional, isLink });
-        } else if (!isOptional && app.applicationType !== 'Consortium' && app.applicationType !== 'Organization' && app.applicationType !== 'Individual') {
-            // Only flag as missing if it was a required field
-            dataPoints.push({ label, value: "N/A (Required Field Missing)", color: "text-red-500" });
-        }
-    };
-    
-    const renderIndividualDetails = (data) => {
-        addData("Full Name/Alias", data.fullName, false);
-        addData("Contact Email", data.email, false);
-        addData("Geographic Representation", data.geographicRep, true);
-        addData("Biography", data.biography, false);
-        addData("Conflict of Interest", data.conflictOfInterest, true);
-        addData("Stake ID", data.stakeId, true);
-        addData("DRep ID", data.dRepId, true);
-        addData("Social / X Profile", data.socialProfile, true, true);
-        
-        const videoStatus = data.proofOfLifeExempt 
-            ? `Exempt (Previously Submitted)` 
-            : data.proofOfLifeLink || "N/A (Required)";
-        
-        addData("Proof-of-Life Video Link", videoStatus, false, !data.proofOfLifeExempt && data.proofOfLifeLink);
-        
-        addData("Motivation for Serving", data.motivation, false);
-        addData("Relevant Experience", data.experience, false);
-        addData("Communication & Transparency Approach", data.transparencyApproach, false);
-        
-        return dataPoints;
-    };
-
-    const renderOrganizationDetails = (data) => {
-        addData("Organization Name", data.orgName, false);
-        addData("Primary Contact Person", data.contactPerson, false);
-        addData("Primary Contact Email", data.contactEmail, false);
-        addData("Organization Description", data.orgDescription, false);
-        addData("Conflict of Interest", data.orgConflictOfInterest, true);
-        
-        const videoStatus = data.orgProofOfLifeExempt 
-            ? `Exempt (Previously Submitted)` 
-            : data.orgProofOfLifeLink || "N/A (Required)";
-        
-        addData("Proof-of-Life Video Link", videoStatus, false, !data.orgProofOfLifeExempt && data.orgProofOfLifeLink);
-
-        addData("Governance or Blockchain Experience", data.orgExperience, false);
-        addData("Why the Organization Wishes to Serve", data.orgMotivation, false);
-        addData("Communication & Transparency Approach", data.orgTransparencyApproach, false);
-        
-        return dataPoints;
-    };
-    
-    const renderConsortiumDetails = (data) => {
-        addData("Consortium Name", data.consortiumName, false);
-        addData("Contact Person", data.consortiumContactPerson, false);
-        addData("Contact Email", data.consortiumContactEmail, false);
-        addData("Mission / Purpose", data.consortiumMission, true);
-        addData("Values", data.consortiumValues, true);
-        addData("Why the Consortium Wishes to Serve", data.consortiumMotivation, false);
-        addData("Governance Experience", data.consortiumExperience, false);
-        addData("Communication Approach", data.consortiumTransparencyApproach, false);
-        
-        return dataPoints;
-    };
-
-    let details = [];
-    if (app.applicationType === 'Individual') {
-        details = renderIndividualDetails(app);
-    } else if (app.applicationType === 'Organization') {
-        details = renderOrganizationDetails(app);
-    } else if (app.applicationType === 'Consortium') {
-        details = renderConsortiumDetails(app);
-    }
-    
-    return (
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-            <h4 className="text-base font-bold text-gray-800 border-b border-indigo-50 pb-1">Full Application Details</h4>
-            
-            {details.map((item, index) => (
-                <div key={index}>
-                    <p className="text-xs font-semibold text-gray-500 mb-0.5">
-                        {item.label} 
-                        {item.isOptional && <span className="text-gray-400 font-normal ml-1">(Optional)</span>}
-                    </p>
-                    {item.isLink && typeof item.value === 'string' && item.value.startsWith('http') ? (
-                        <a href={item.value} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:text-indigo-800 underline break-all">
-                            {item.value}
-                        </a>
-                    ) : (
-                        <p className={`text-sm text-gray-700 ${item.color || 'text-gray-700'} whitespace-pre-wrap break-words`}>
-                            {item.value}
-                        </p>
-                    )}
-                </div>
-            ))}
-
-            {app.applicationType === 'Consortium' && app.consortiumMembers && app.consortiumMembers.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-gray-100">
-                    <h4 className="text-base font-bold text-indigo-700 mb-3 flex items-center">
-                        <Users className="w-4 h-4 mr-1"/> Consortium Members ({app.consortiumMembers.length})
-                    </h4>
-                    {app.consortiumMembers.map((member, index) => (
-                        <div key={index} className="mb-4 p-3 border border-gray-100 rounded-lg bg-gray-50 space-y-1">
-                            <p className="font-semibold text-sm text-gray-800">Member {index + 1}: {member.name || 'Unnamed Member'}</p>
-                            
-                            <p className="text-xs text-gray-600">
-                                **Bio:** {member.biography || 'N/A'}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                                **Geo:** {member.geographicRep || 'N/A'} 
-                                {member.stakeId && <span className="ml-2"> | **Stake ID:** {member.stakeId}</span>}
-                            </p>
-                            
-                            <p className="text-xs text-gray-600">
-                                **Conflict:** {member.conflictOfInterest || 'None Declared (Optional)'}
-                            </p>
-
-                            <p className="text-xs text-gray-600">
-                                **Social:** {member.socialProfile ? <a href={member.socialProfile} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 underline ml-1 break-all">View Link</a> : 'N/A'}
-                            </p>
-
-                            <p className="text-xs text-gray-600">
-                                **PoL Link:** {member.hasPreviousProof 
-                                    ? <span className="text-yellow-700 ml-1">Exempt</span> 
-                                    : (member.proofOfLifeLink ? <a href={member.proofOfLifeLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 underline ml-1 break-all">View Link</a> : <span className="text-red-500 ml-1">Missing</span>)}
-                            </p>
-                        </div>
-                    ))}
-                </div>
-            )}
-            
-            <p className="text-xs text-gray-400 mt-4">
-              Submitted: {formatTimestamp(app.submittedAt)} by User ID: {app.userId}
-            </p>
-        </div>
-    );
-}
-
-// --- Main Application Component ---
-const App = () => {
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [applications, setApplications] = useState([]);
-  const [expandedId, setExpandedId] = useState(null); // State to track which item is expanded
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  
-  // State to switch between form types
-  const [formType, setFormType] = useState('Individual'); // 'Individual', 'Organization', or 'Consortium'
-
-  // Character limits
-  const BIO_LIMIT = 500; // Used for Individual Bio, Org Description, & Member Biography
-  const MOTIVATION_LIMIT = 1000; // Used for Individual, Org, & Consortium Motivation
-
-  // --- Individual Form State ---
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [geographicRep, setGeographicRep] = useState('');
-  const [biography, setBiography] = useState('');
-  const [conflictOfInterest, setConflictOfInterest] = useState('');
-  const [stakeId, setStakeId] = useState('');
-  const [dRepId, setDRepId] = useState('');
-  const [socialProfile, setSocialProfile] = useState('');
-  const [proofOfLifeLink, setProofOfLifeLink] = useState('');
-  const [motivation, setMotivation] = useState('');
-  const [experience, setExperience] = useState('');
-  const [transparencyApproach, setTransparencyApproach] = useState('');
-  const [hasPreviousIndividualProof, setHasPreviousIndividualProof] = useState(false); // New exemption state
-  
-  // --- Organization Form State ---
-  const [orgName, setOrgName] = useState('');
-  const [contactPerson, setContactPerson] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [orgDescription, setOrgDescription] = useState('');
-  const [orgConflictOfInterest, setOrgConflictOfInterest] = useState('');
-  const [orgProofOfLifeLink, setOrgProofOfLifeLink] = useState('');
-  const [orgExperience, setOrgExperience] = useState('');
-  const [orgTransparencyApproach, setOrgTransparencyApproach] = useState('');
-  const [orgMotivation, setOrgMotivation] = useState('');
-  const [hasPreviousOrgProof, setHasPreviousOrgProof] = useState(false); // New exemption state
-
-  // --- Consortium Form State ---
-  const [consortiumName, setConsortiumName] = useState('');
-  const [consortiumContactPerson, setConsortiumContactPerson] = useState('');
-  const [consortiumContactEmail, setConsortiumContactEmail] = useState('');
-  const [consortiumMission, setConsortiumMission] = useState(''); 
-  const [consortiumValues, setConsortiumValues] = useState(''); 
-  const [consortiumMotivation, setConsortiumMotivation] = useState(''); 
-  const [consortiumExperience, setConsortiumExperience] = useState(''); 
-  const [consortiumTransparencyApproach, setConsortiumTransparencyApproach] = useState(''); 
-
-  const [consortiumMembers, setConsortiumMembers] = useState([{
-      name: '',
-      geographicRep: '',
-      biography: '',
-      conflictOfInterest: '',
-      stakeId: '',
-      dRepId: '',
-      socialProfile: '',
-      proofOfLifeLink: '',
-      hasPreviousProof: false, // New member exemption field
-  }]);
-
-  // 1. Initialize Firebase and Auth
-  useEffect(() => {
-    try {
-      if (!firebaseConfig.apiKey) {
-        console.error("Firebase API Key is missing. Check environment variables.");
-        setError("Configuration missing. Submissions will not persist.");
-        return;
-      }
-      
-      const app = initializeApp(firebaseConfig);
-      const firestore = getFirestore(app);
-      const firebaseAuth = getAuth(app);
-      setLogLevel('Debug'); // Enable logging for debugging
-
-      setDb(firestore);
-      setAuth(firebaseAuth);
-
-      const authenticate = async () => {
-          try {
-              if (initialAuthToken) {
-                // Use custom token if provided (e.g., from Canvas environment)
-                await signInWithCustomToken(firebaseAuth, initialAuthToken);
-              } else {
-                // Otherwise, sign in anonymously for public read/write access
-                await signInAnonymously(firebaseAuth);
-              }
-          } catch (e) {
-              console.error("Authentication failed:", e);
-              setError("Failed to authenticate with Firebase.");
-          }
-      };
-
-      const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-        if (user) {
-          setUserId(user.uid);
-          setIsAuthReady(true);
-        } else {
-            authenticate();
-        }
-      });
-      
-      return () => unsubscribe();
-    } catch (e) {
-      console.error("Firebase setup error:", e);
-      setError("Application initialization failed. Check console and configuration.");
-    }
-  }, []); // Run only once
-
-  // 2. Real-time Data Listener (Applications)
-  useEffect(() => {
-    // Only proceed once we have a DB instance and the user is authenticated (userId is set)
-    if (!isAuthReady || !db || !userId) return;
-
-    setIsLoading(true);
-    const applicationsRef = collection(db, PUBLIC_COLLECTION_PATH);
-    const q = query(applicationsRef);
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newApplications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Ensure timestamp is handled correctly
-        submittedAt: doc.data().submittedAt
-      }));
-      setApplications(newApplications.sort((a, b) => 
-        (b.submittedAt?.toMillis() || 0) - (a.submittedAt?.toMillis() || 0)
-      ));
-      setIsLoading(false);
-      
-    }, (e) => {
-      console.error("Error fetching applications:", e);
-      setError("Failed to fetch applications in real-time. Check Firestore rules.");
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [isAuthReady, db, userId]);
-
-  // Function to reset all form fields
-  const resetForm = () => {
-    // Individual Resets
-    setFullName(''); setEmail(''); setGeographicRep(''); setBiography('');
-    setConflictOfInterest(''); setStakeId(''); setDRepId(''); setSocialProfile('');
-    setProofOfLifeLink(''); setMotivation(''); setExperience('');
-    setTransparencyApproach(''); setHasPreviousIndividualProof(false);
-
-    // Organization Resets
-    setOrgName(''); setContactPerson(''); setContactEmail(''); setOrgDescription('');
-    setOrgConflictOfInterest(''); setOrgProofOfLifeLink(''); setOrgExperience('');
-    setOrgTransparencyApproach(''); setOrgMotivation(''); setHasPreviousOrgProof(false);
-
-    // Consortium Resets
-    setConsortiumName(''); setConsortiumContactPerson(''); setConsortiumContactEmail('');
-    setConsortiumMission(''); setConsortiumValues(''); setConsortiumMotivation('');
-    setConsortiumExperience(''); setConsortiumTransparencyApproach('');
-    setConsortiumMembers([{
-        name: '', geographicRep: '', biography: '', conflictOfInterest: '',
-        stakeId: '', dRepId: '', socialProfile: '', proofOfLifeLink: '', hasPreviousProof: false,
-    }]);
-  };
-
-  // Consortium Member Management Functions
-  const addMember = () => {
-    setConsortiumMembers([...consortiumMembers, {
-        name: '', geographicRep: '', biography: '', conflictOfInterest: '',
-        stakeId: '', dRepId: '', socialProfile: '', proofOfLifeLink: '', hasPreviousProof: false,
-    }]);
-  };
-
-  const removeMember = (index) => {
-    setConsortiumMembers(consortiumMembers.filter((_, i) => i !== index));
-  };
-
-  const updateMember = (index, field, value) => {
-    const newMembers = [...consortiumMembers];
-    newMembers[index][field] = value;
-    // Clear the link field if exemption is checked
-    if (field === 'hasPreviousProof' && value === true) {
-        newMembers[index]['proofOfLifeLink'] = '';
-    }
-    setConsortiumMembers(newMembers);
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!db || !userId) {
-      setError("System not ready. Please wait for initialization/authentication.");
-      return;
-    }
-
-    let applicationData = {};
-    let requiredFieldsMet = true;
-    let lengthChecksMet = true;
-    
-    // --- Individual Validation and Data Assembly ---
-    if (formType === 'Individual') {
-      // Check required fields, factoring in Proof-of-Life exemption
-      if (!fullName.trim() || !email.trim() || !biography.trim() || !motivation.trim() || !experience.trim() || !transparencyApproach.trim() || 
-          (!hasPreviousIndividualProof && !proofOfLifeLink.trim())) {
-        requiredFieldsMet = false;
-      }
-      if (biography.trim().length > BIO_LIMIT || motivation.trim().length > MOTIVATION_LIMIT) {
-        lengthChecksMet = false;
-        setError(`Please check the length of your Biography (max ${BIO_LIMIT}) and Motivation (max ${MOTIVATION_LIMIT}).`);
-      }
-
-      applicationData = {
-        fullName: fullName.trim(), email: email.trim(), geographicRep: geographicRep.trim(), biography: biography.trim(),
-        conflictOfInterest: conflictOfInterest.trim(), stakeId: stakeId.trim(), dRepId: dRepId.trim(),
-        socialProfile: socialProfile.trim(), proofOfLifeLink: proofOfLifeLink.trim(), motivation: motivation.trim(),
-        experience: experience.trim(), transparencyApproach: transparencyApproach.trim(), 
-        applicationType: 'Individual',
-        proofOfLifeExempt: hasPreviousIndividualProof, // Store exemption status
-      };
-    } 
-    // --- Organization Validation and Data Assembly ---
-    else if (formType === 'Organization') {
-      // Check required fields, factoring in Proof-of-Life exemption
-      if (!orgName.trim() || !contactPerson.trim() || !contactEmail.trim() || !orgDescription.trim() || !orgExperience.trim() || !orgTransparencyApproach.trim() || !orgMotivation.trim() ||
-          (!hasPreviousOrgProof && !orgProofOfLifeLink.trim())) {
-        requiredFieldsMet = false;
-      }
-      if (orgDescription.trim().length > BIO_LIMIT || orgMotivation.trim().length > MOTIVATION_LIMIT) {
-        lengthChecksMet = false;
-        setError(`Please check the length of the Organization Description (max ${BIO_LIMIT}) and Motivation (max ${MOTIVATION_LIMIT}).`);
-      }
-      
-      applicationData = {
-        orgName: orgName.trim(), contactPerson: contactPerson.trim(), contactEmail: contactEmail.trim(), orgDescription: orgDescription.trim(),
-        orgConflictOfInterest: orgConflictOfInterest.trim(), orgProofOfLifeLink: orgProofOfLifeLink.trim(), orgExperience: orgExperience.trim(),
-        orgTransparencyApproach: orgTransparencyApproach.trim(), orgMotivation: orgMotivation.trim(), 
-        applicationType: 'Organization',
-        orgProofOfLifeExempt: hasPreviousOrgProof, // Store exemption status
-      };
-    }
-    // --- Consortium Validation and Data Assembly ---
-    else if (formType === 'Consortium') {
-        // Consortium Core Required Fields
-        if (!consortiumName.trim() || !consortiumContactPerson.trim() || !consortiumContactEmail.trim() || !consortiumMotivation.trim() || !consortiumExperience.trim() || !consortiumTransparencyApproach.trim() || consortiumMembers.length === 0) {
-            requiredFieldsMet = false;
-        }
-        if (consortiumMotivation.trim().length > MOTIVATION_LIMIT) {
-            lengthChecksMet = false;
-            setError(`Please check the length of the Consortium Motivation (max ${MOTIVATION_LIMIT}).`);
-        }
-
-        // Member Required Fields and Length Checks
-        consortiumMembers.forEach((member, index) => {
-            if (!member.name.trim() || !member.biography.trim() || 
-                (!member.hasPreviousProof && !member.proofOfLifeLink.trim()) || // Conditional check
-                member.biography.trim().length > BIO_LIMIT) {
-                
-                requiredFieldsMet = false; // Name, Bio, or (Link if not exempt) missing
-                if (member.biography.trim().length > BIO_LIMIT) {
-                    lengthChecksMet = false;
-                    setError(`Please check the length of the Biography for Member ${index + 1} (max ${BIO_LIMIT} characters).`);
-                }
-            }
-        });
-
-        const membersData = consortiumMembers.map(member => ({
-            ...member,
-            name: member.name.trim(), biography: member.biography.trim(), conflictOfInterest: member.conflictOfInterest.trim(),
-            geographicRep: member.geographicRep.trim(), stakeId: member.stakeId.trim(), dRepId: member.dRepId.trim(),
-            socialProfile: member.socialProfile.trim(), proofOfLifeLink: member.proofOfLifeLink.trim(),
-            hasPreviousProof: member.hasPreviousProof, // Store exemption status
-        }));
-
-        applicationData = {
-            consortiumName: consortiumName.trim(), consortiumContactPerson: consortiumContactPerson.trim(), consortiumContactEmail: consortiumContactEmail.trim(),
-            consortiumMission: consortiumMission.trim(), consortiumValues: consortiumValues.trim(),
-            consortiumMotivation: consortiumMotivation.trim(), 
-            consortiumExperience: consortiumExperience.trim(), 
-            consortiumTransparencyApproach: consortiumTransparencyApproach.trim(), 
-            consortiumMembers: membersData,
-            applicationType: 'Consortium',
-        };
-    }
-    
-    if (!requiredFieldsMet) {
-      setError("Please fill out all required fields marked with an asterisk (*).");
-      return;
-    }
-    if (!lengthChecksMet) {
-        return;
-    }
-
-    setIsSubmitting(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const finalData = {
-        ...applicationData,
-        submittedAt: serverTimestamp(),
-        userId: userId, // The ID of the user who submitted this form
-        submitterAppId: appId,
-      };
-
-      const applicationsRef = collection(db, PUBLIC_COLLECTION_PATH);
-      await addDoc(applicationsRef, finalData);
-
-      resetForm();
-      setSuccessMessage(`${formType} Application successful! Your candidacy is recorded.`);
-
-    } catch (e) {
-      console.error("Error submitting application:", e);
-      setError(`Submission failed: ${e.message}`);
-    } finally {
-      setIsSubmitting(false);
-      setTimeout(() => setSuccessMessage(''), 8000); 
-    }
-  };
-
-  const renderIndividualForm = () => (
-    <div className="space-y-6">
-      <h3 className="text-xl font-bold text-gray-700 border-b pb-2 flex items-center">
-        <Users className="w-5 h-5 mr-2 text-indigo-500"/> Individual Candidate Details
-      </h3>
-      
-      {/* --- Core Identity --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="col-span-1">
-          <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">Full Name or Alias <span className="text-red-500">*</span></label>
-          <input type="text" id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} required={formType === 'Individual'} placeholder="Satoshi Nakamoto" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-        </div>
-        <div className="col-span-1">
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Contact Email <span className="text-red-500">*</span></label>
-          <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} required={formType === 'Individual'} placeholder="contact@example.com" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-        </div>
-      </div>
-
-      {/* Geographic Representation (Optional) */}
-      <div>
-        <label htmlFor="geographicRep" className="block text-sm font-medium text-gray-700 mb-1">Geographic Representation (Optional)</label>
-        <input type="text" id="geographicRep" value={geographicRep} onChange={(e) => setGeographicRep(e.target.value)} placeholder="e.g., APAC, Western Europe, or a specific city/region" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-        <FieldDescription>Where are you physically located or which region/community do you primarily represent?</FieldDescription>
-      </div>
-
-      {/* Biography (Required) */}
-      <div>
-        <label htmlFor="biography" className="block text-sm font-medium text-gray-700 mb-1">Biography <span className="text-red-500">*</span> 
-          <span className="text-xs text-gray-400 float-right">({biography.length} / {BIO_LIMIT} chars)</span>
-        </label>
-        <textarea id="biography" rows="3" value={biography} onChange={(e) => setBiography(e.target.value)} required={formType === 'Individual'} maxLength={BIO_LIMIT} placeholder="A brief summary of your background and expertise." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>A brief summary of your background, expertise, and public profile (max {BIO_LIMIT} characters).</FieldDescription>
-      </div>
-
-      {/* Conflict of Interest (Optional) */}
-      <div>
-        <label htmlFor="conflictOfInterest" className="block text-sm font-medium text-gray-700 mb-1">Conflict of Interest (Optional)</label>
-        <textarea id="conflictOfInterest" rows="3" value={conflictOfInterest} onChange={(e) => setConflictOfInterest(e.target.value)} placeholder="If none, you can leave this blank or write 'None'." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Disclose any relationships, holdings, or interests that may conflict with impartial service on the Committee.</FieldDescription>
-      </div>
-      
-      {/* --- Technical Identifiers --- */}
-      <h3 className="text-lg font-semibold text-gray-700 pt-4 border-t border-gray-100">Optional Technical IDs</h3>
-      <div className="grid sm:grid-cols-3 gap-4">
-        <div>
-          <label htmlFor="stakeId" className="block text-sm font-medium text-gray-700 mb-1">Stake ID (Optional)</label>
-          <input type="text" id="stakeId" value={stakeId} onChange={(e) => setStakeId(e.target.value)} placeholder="stake..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-          <FieldDescription>Your primary staking key hash.</FieldDescription>
-        </div>
-        <div>
-          <label htmlFor="dRepId" className="block text-sm font-medium text-gray-700 mb-1">DRep ID (Optional)</label>
-          <input type="text" id="dRepId" value={dRepId} onChange={(e) => setDRepId(e.target.value)} placeholder="drep..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-          <FieldDescription>Your Delegated Representative ID.</FieldDescription>
-        </div>
-        <div>
-          <label htmlFor="socialProfile" className="block text-sm font-medium text-gray-700 mb-1">Social / X Profile (Optional)</label>
-          <input type="url" id="socialProfile" value={socialProfile} onChange={(e) => setSocialProfile(e.target.value)} placeholder="https://x.com/yourprofile" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-          <FieldDescription>Link to your primary social media or X profile.</FieldDescription>
-        </div>
-      </div>
-      
-      {/* Proof-of-Life Video Link (Required/Optional) */}
-      <div>
-        <label htmlFor="proofOfLifeLink" className="block text-sm font-medium text-gray-700 mb-1">Proof-of-Life Video Link <span className="text-red-500">{hasPreviousIndividualProof ? '' : '*'}</span></label>
-        <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><Camera className="w-5 h-5" /></span>
-          <input 
-            type="url" 
-            id="proofOfLifeLink" 
-            value={proofOfLifeLink} 
-            onChange={(e) => setProofOfLifeLink(e.target.value)} 
-            required={formType === 'Individual' && !hasPreviousIndividualProof} 
-            disabled={hasPreviousIndividualProof}
-            placeholder="https://youtube.com/link-to-video" 
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 disabled:bg-gray-100" 
-          />
-        </div>
-        
-        <div className="flex items-center mt-2">
-            <input type="checkbox" id="previousProofIndividual" checked={hasPreviousIndividualProof} onChange={(e) => {
-                setHasPreviousIndividualProof(e.target.checked);
-                if (e.target.checked) setProofOfLifeLink(''); // Clear link if exempt
-            }} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-            <label htmlFor="previousProofIndividual" className="ml-2 block text-sm text-gray-700">
-                Opt-out: I have previously submitted a Proof-of-Life video for an earlier election.
-            </label>
-        </div>
-        <ExemptionWarning isExempt={hasPreviousIndividualProof} />
-        <FieldDescription>A publicly accessible link (e.g., YouTube, Vimeo) to your introductory Proof-of-Life video.</FieldDescription>
-      </div>
-
-      {/* Motivation (Required) */}
-      <div>
-        <label htmlFor="motivation" className="block text-sm font-medium text-gray-700 mb-1">Motivation for Serving <span className="text-red-500">*</span>
-          <span className="text-xs text-gray-400 float-right">({motivation.length} / {MOTIVATION_LIMIT} chars)</span>
-        </label>
-        <textarea id="motivation" rows="4" value={motivation} onChange={(e) => setMotivation(e.target.value)} required={formType === 'Individual'} maxLength={MOTIVATION_LIMIT} placeholder="I want to serve because..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Explain why you are driven to serve and what fundamental values you uphold (max {MOTIVATION_LIMIT} characters).</FieldDescription>
-      </div>
-
-      {/* Relevant Experience (Required) */}
-      <div>
-        <label htmlFor="experience" className="block text-sm font-medium text-gray-700 mb-1">Relevant Governance or Constitutional Experience <span className="text-red-500">*</span></label>
-        <textarea id="experience" rows="4" value={experience} onChange={(e) => setExperience(e.target.value)} required={formType === 'Individual'} placeholder="Detail your relevant experience here..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Detail any past experience in governance, law, policy, or community leadership.</FieldDescription>
-      </div>
-
-      {/* Communication Approach (Required) */}
-      <div>
-        <label htmlFor="transparencyApproach" className="block text-sm font-medium text-gray-700 mb-1">Communication & Transparency Approach <span className="text-red-500">*</span></label>
-        <textarea id="transparencyApproach" rows="4" value={transparencyApproach} onChange={(e) => setTransparencyApproach(e.target.value)} required={formType === 'Individual'} placeholder="My plan is to..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Describe your plan for regular communication and maintaining transparency with the community.</FieldDescription>
-      </div>
-    </div>
-  );
-
-  const renderOrganizationForm = () => (
-    <div className="space-y-6">
-      <h3 className="text-xl font-bold text-gray-700 border-b pb-2 flex items-center">
-        <Building2 className="w-5 h-5 mr-2 text-indigo-500"/> Organization Candidate Details
-      </h3>
-      
-      {/* Organization Name (Required) */}
-      <div>
-        <label htmlFor="orgName" className="block text-sm font-medium text-gray-700 mb-1">Organization Name <span className="text-red-500">*</span></label>
-        <input type="text" id="orgName" value={orgName} onChange={(e) => setOrgName(e.target.value)} required={formType === 'Organization'} placeholder="Input Output Global" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-      </div>
-
-      {/* Primary Contact Person (Required) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="contactPerson" className="block text-sm font-medium text-gray-700 mb-1">Primary Contact Person <span className="text-red-500">*</span></label>
-          <input type="text" id="contactPerson" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} required={formType === 'Organization'} placeholder="Jane Doe" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-        </div>
-        <div>
-          <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700 mb-1">Primary Contact Email <span className="text-red-500">*</span></label>
-          <input type="email" id="contactEmail" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} required={formType === 'Organization'} placeholder="jane.doe@org.com" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-        </div>
-      </div>
-
-      {/* Organization Description (Required) */}
-      <div>
-        <label htmlFor="orgDescription" className="block text-sm font-medium text-gray-700 mb-1">Organization Description <span className="text-red-500">*</span>
-          <span className="text-xs text-gray-400 float-right">({orgDescription.length} / {BIO_LIMIT} chars)</span>
-        </label>
-        <textarea id="orgDescription" rows="3" value={orgDescription} onChange={(e) => setOrgDescription(e.target.value)} required={formType === 'Organization'} maxLength={BIO_LIMIT} placeholder="A brief summary of your organization's mission, size, and relationship to the ecosystem." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>A brief summary of your organization's mission and relevance (max {BIO_LIMIT} characters).</FieldDescription>
-      </div>
-
-      {/* Conflict of Interest (Optional) */}
-      <div>
-        <label htmlFor="orgConflictOfInterest" className="block text-sm font-medium text-gray-700 mb-1">Conflict of Interest (Optional)</label>
-        <textarea id="orgConflictOfInterest" rows="3" value={orgConflictOfInterest} onChange={(e) => setOrgConflictOfInterest(e.target.value)} placeholder="If none, you can leave this blank or write 'None'." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Disclose any relationships, holdings, or interests that may conflict with impartial service on the Committee.</FieldDescription>
-      </div>
-
-      {/* Proof-of-Life Video Link (Required/Optional) */}
-      <div>
-        <label htmlFor="orgProofOfLifeLink" className="block text-sm font-medium text-gray-700 mb-1">Proof-of-Life Video Link <span className="text-red-500">{hasPreviousOrgProof ? '' : '*'}</span></label>
-        <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><Camera className="w-5 h-5" /></span>
-          <input 
-            type="url" 
-            id="orgProofOfLifeLink" 
-            value={orgProofOfLifeLink} 
-            onChange={(e) => setOrgProofOfLifeLink(e.target.value)} 
-            required={formType === 'Organization' && !hasPreviousOrgProof} 
-            disabled={hasPreviousOrgProof}
-            placeholder="https://youtube.com/link-to-video" 
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 disabled:bg-gray-100" 
-          />
-        </div>
-        
-        <div className="flex items-center mt-2">
-            <input type="checkbox" id="previousProofOrg" checked={hasPreviousOrgProof} onChange={(e) => {
-                setHasPreviousOrgProof(e.target.checked);
-                if (e.target.checked) setOrgProofOfLifeLink(''); // Clear link if exempt
-            }} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-            <label htmlFor="previousProofOrg" className="ml-2 block text-sm text-gray-700">
-                Opt-out: Our organization previously submitted a Proof-of-Life video.
-            </label>
-        </div>
-        <ExemptionWarning isExempt={hasPreviousOrgProof} />
-        <FieldDescription>A publicly accessible link (e.g., YouTube, Vimeo) to the organization's introductory video.</FieldDescription>
-      </div>
-
-      {/* Relevant Experience (Required) */}
-      <div>
-        <label htmlFor="orgExperience" className="block text-sm font-medium text-gray-700 mb-1">Governance or Blockchain Experience <span className="text-red-500">*</span></label>
-        <textarea id="orgExperience" rows="4" value={orgExperience} onChange={(e) => setOrgExperience(e.target.value)} required={formType === 'Organization'} placeholder="Detail your organization's relevant experience here..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Detail the organization's past experience in decentralized governance, law, or policy within the blockchain space.</FieldDescription>
-      </div>
-
-      {/* Motivation (Required) */}
-      <div>
-        <label htmlFor="orgMotivation" className="block text-sm font-medium text-gray-700 mb-1">Why the Organization Wishes to Serve <span className="text-red-500">*</span>
-          <span className="text-xs text-gray-400 float-right">({orgMotivation.length} / {MOTIVATION_LIMIT} chars)</span>
-        </label>
-        <textarea id="orgMotivation" rows="4" value={orgMotivation} onChange={(e) => setOrgMotivation(e.target.value)} required={formType === 'Organization'} maxLength={MOTIVATION_LIMIT} placeholder="Our organization wishes to serve because..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Explain the organization's strategic motivation and the fundamental values it will bring to the committee (max {MOTIVATION_LIMIT} characters).</FieldDescription>
-      </div>
-
-      {/* Communication Approach (Required) */}
-      <div>
-        <label htmlFor="orgTransparencyApproach" className="block text-sm font-medium text-gray-700 mb-1">Communication & Transparency Approach <span className="text-red-500">*</span></label>
-        <textarea id="orgTransparencyApproach" rows="4" value={orgTransparencyApproach} onChange={(e) => setOrgTransparencyApproach(e.target.value)} required={formType === 'Organization'} placeholder="Our organization's plan is to..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Describe the organization's plan for regular communication and maintaining transparency with the community.</FieldDescription>
-      </div>
-    </div>
-  );
-
-  const renderConsortiumForm = () => (
-    <div className="space-y-6">
-      <h3 className="text-xl font-bold text-gray-700 border-b pb-2 flex items-center">
-        <Combine className="w-5 h-5 mr-2 text-indigo-500"/> Consortium Candidate Details
-      </h3>
-      
-      {/* --- Consortium Core Details --- */}
-      {/* Name */}
-      <div>
-          <label htmlFor="cName" className="block text-sm font-medium text-gray-700 mb-1">Consortium Name <span className="text-red-500">*</span></label>
-          <input type="text" id="cName" value={consortiumName} onChange={(e) => setConsortiumName(e.target.value)} required={formType === 'Consortium'} placeholder="The Cardano Collective" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-      </div>
-
-      {/* Contact Person / Email */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-              <label htmlFor="cContactPerson" className="block text-sm font-medium text-gray-700 mb-1">Consortium Contact Person <span className="text-red-500">*</span></label>
-              <input type="text" id="cContactPerson" value={consortiumContactPerson} onChange={(e) => setConsortiumContactPerson(e.target.value)} required={formType === 'Consortium'} placeholder="Primary Liaison" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-          </div>
-          <div>
-              <label htmlFor="cContactEmail" className="block text-sm font-medium text-gray-700 mb-1">Consortium Contact Person email <span className="text-red-500">*</span></label>
-              <input type="email" id="cContactEmail" value={consortiumContactEmail} onChange={(e) => setConsortiumContactEmail(e.target.value)} required={formType === 'Consortium'} placeholder="contact@consortium.org" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-          </div>
-      </div>
-
-      {/* Mission / Purpose (Optional) */}
-      <div>
-          <label htmlFor="cMission" className="block text-sm font-medium text-gray-700 mb-1">Consortium Mission / Purpose (Optional)</label>
-          <textarea id="cMission" rows="3" value={consortiumMission} onChange={(e) => setConsortiumMission(e.target.value)} placeholder="What is the primary objective of your consortium?" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-          <FieldDescription>A brief overview of your collective's long-term goals and why you formed.</FieldDescription>
-      </div>
-
-      {/* Values (Optional) */}
-      <div>
-          <label htmlFor="cValues" className="block text-sm font-medium text-gray-700 mb-1">Consortium Values (Optional)</label>
-          <textarea id="cValues" rows="3" value={consortiumValues} onChange={(e) => setConsortiumValues(e.target.value)} placeholder="Decentralization, Security, Transparency..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-          <FieldDescription>Key principles that guide your consortium's actions and decisions.</FieldDescription>
-      </div>
-
-      {/* --- REQUIRED FIELDS FOR CONSORTIUM --- */}
-      
-      {/* Motivation (Required) */}
-      <div>
-        <label htmlFor="cMotivation" className="block text-sm font-medium text-gray-700 mb-1">Why the Consortium Wishes to Serve <span className="text-red-500">*</span>
-          <span className="text-xs text-gray-400 float-right">({consortiumMotivation.length} / {MOTIVATION_LIMIT} chars)</span>
-        </label>
-        <textarea id="cMotivation" rows="4" value={consortiumMotivation} onChange={(e) => setConsortiumMotivation(e.target.value)} required={formType === 'Consortium'} maxLength={MOTIVATION_LIMIT} placeholder="Our consortium wishes to serve because..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Explain the collective strategic motivation and the fundamental values it will bring to the committee (max {MOTIVATION_LIMIT} characters).</FieldDescription>
-      </div>
-
-      {/* Relevant Experience (Required) */}
-      <div>
-        <label htmlFor="cExperience" className="block text-sm font-medium text-gray-700 mb-1">Consortium Governance Experience <span className="text-red-500">*</span></label>
-        <textarea id="cExperience" rows="4" value={consortiumExperience} onChange={(e) => setConsortiumExperience(e.target.value)} required={formType === 'Consortium'} placeholder="Detail your consortium's relevant experience here..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Detail the consortium's collective experience in decentralized governance, law, or policy.</FieldDescription>
-      </div>
-
-      {/* Communication Approach (Required) */}
-      <div>
-        <label htmlFor="cTransparencyApproach" className="block text-sm font-medium text-gray-700 mb-1">Consortium Communication Approach <span className="text-red-500">*</span></label>
-        <textarea id="cTransparencyApproach" rows="4" value={consortiumTransparencyApproach} onChange={(e) => setConsortiumTransparencyApproach(e.target.value)} required={formType === 'Consortium'} placeholder="Our consortium's plan is to..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-        <FieldDescription>Describe the consortium's plan for regular communication and maintaining transparency with the community.</FieldDescription>
-      </div>
-
-      <h3 className="text-xl font-bold text-gray-700 border-t pt-4 mt-6 flex items-center">
-          <Users className="w-5 h-5 mr-2 text-indigo-500"/> Consortium Members <span className="text-red-500 ml-2 text-sm">*</span>
-      </h3>
-      <FieldDescription>Each member listed must have a Name, Biography, and Proof-of-Life video link filled out (unless exempted). Please ensure at least one member is added.</FieldDescription>
-
-      {/* --- Dynamic Member List --- */}
-      <div className="space-y-6 border p-4 rounded-xl bg-gray-50">
-          {consortiumMembers.map((member, index) => (
-              <div key={index} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm relative">
-                  <h4 className="text-lg font-semibold text-indigo-700 mb-3">Member #{index + 1}</h4>
-                  {consortiumMembers.length > 1 && (
-                      <button
-                          type="button"
-                          onClick={() => removeMember(index)}
-                          className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition duration-150 p-1 rounded-full bg-red-50 hover:bg-red-100"
-                          title="Remove Member"
-                      >
-                          <X className="w-5 h-5" />
-                      </button>
-                  )}
-
-                  {/* Member Name */}
-                  <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-                      <input type="text" value={member.name} onChange={(e) => updateMember(index, 'name', e.target.value)} required={formType === 'Consortium'} placeholder="Member Name" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-                  </div>
-
-                  {/* Geographic Representation */}
-                  <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Geographic Representation (Optional)</label>
-                      <input type="text" value={member.geographicRep} onChange={(e) => updateMember(index, 'geographicRep', e.target.value)} placeholder="Region or Country" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-                  </div>
-
-                  {/* Biography */}
-                  <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Biography <span className="text-red-500">*</span>
-                          <span className="text-xs text-gray-400 float-right">({member.biography.length} / {BIO_LIMIT} chars)</span>
-                      </label>
-                      <textarea rows="3" value={member.biography} onChange={(e) => updateMember(index, 'biography', e.target.value)} required={formType === 'Consortium'} maxLength={BIO_LIMIT} placeholder="Brief background and expertise of the member." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-                  </div>
-                  
-                  {/* Conflict of Interest */}
-                  <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Confilict of interest (Optional)</label>
-                      <textarea rows="2" value={member.conflictOfInterest} onChange={(e) => updateMember(index, 'conflictOfInterest', e.target.value)} placeholder="Disclose any conflicts of interest." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"></textarea>
-                  </div>
-
-                  {/* IDs and Social */}
-                  <div className="grid sm:grid-cols-3 gap-4 mb-4">
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Stake ID (Optional)</label>
-                          <input type="text" value={member.stakeId} onChange={(e) => updateMember(index, 'stakeId', e.target.value)} placeholder="stake..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">DRep ID (Optional)</label>
-                          <input type="text" value={member.dRepId} onChange={(e) => updateMember(index, 'dRepId', e.target.value)} placeholder="drep..." className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Social / X Profile (Optional)</label>
-                          <input type="url" value={member.socialProfile} onChange={(e) => updateMember(index, 'socialProfile', e.target.value)} placeholder="https://x.com/profile" className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" />
-                      </div>
-                  </div>
-                  
-                  {/* Proof-of-Life */}
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Proof-of-Life Video link <span className="text-red-500">{member.hasPreviousProof ? '' : '*'}</span></label>
-                      <div className="relative">
-                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><Camera className="w-5 h-5" /></span>
-                          <input 
-                              type="url" 
-                              value={member.proofOfLifeLink} 
-                              onChange={(e) => updateMember(index, 'proofOfLifeLink', e.target.value)} 
-                              required={formType === 'Consortium' && !member.hasPreviousProof} 
-                              disabled={member.hasPreviousProof}
-                              placeholder="https://youtube.com/member-video" 
-                              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 disabled:bg-gray-100" 
-                          />
-                      </div>
-                      
-                      <div className="flex items-center mt-2">
-                          <input type="checkbox" id={`previousProofMember${index}`} checked={member.hasPreviousProof} onChange={(e) => {
-                              updateMember(index, 'hasPreviousProof', e.target.checked);
-                          }} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-                          <label htmlFor={`previousProofMember${index}`} className="ml-2 block text-sm text-gray-700">
-                              Opt-out: Previously submitted Proof-of-Life video.
-                          </label>
-                      </div>
-                      <ExemptionWarning isExempt={member.hasPreviousProof} />
-                      <FieldDescription>A publicly accessible link to the member's Proof-of-Life video.</FieldDescription>
-                  </div>
-              </div>
-          ))}
-          <button
-              type="button"
-              onClick={addMember}
-              className="mt-4 w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150"
-          >
-              <Plus className="w-5 h-5 mr-2" />
-              Add Another Consortium Member
-          </button>
-      </div>
-    </div>
-  );
-  
-  // --- APPLICATION RENDER LOGIC ---
-  return (
-    <div className="min-h-screen bg-gray-50 font-sans antialiased text-gray-800">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <header className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-indigo-700">Constitutional Committee Sign-up Sheet</h1>
-          <p className="mt-2 text-lg text-gray-600">Snap Election - Live Application Portal</p>
-        </header>
-
-        {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4 flex items-center shadow-md">
-                <AlertTriangle className="w-5 h-5 mr-3 flex-shrink-0" />
-                <p className="font-medium text-sm">{error}</p>
-            </div>
-        )}
-        {successMessage && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4 flex items-center shadow-md">
-                <CheckCircle className="w-5 h-5 mr-3 flex-shrink-0" />
-                <p className="font-medium text-sm">{successMessage}</p>
-            </div>
-        )}
-
-        <div className="grid lg:grid-cols-3 gap-8">
-          
-          {/* --- LEFT COLUMN: APPLICATION FORM --- */}
-          <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-3xl shadow-2xl border border-gray-200">
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">Candidate Registration</h2>
-
-            {/* --- Form Type Selector Tabs --- */}
-            <div className="flex border-b border-gray-200 mb-8 overflow-x-auto">
-              {['Individual', 'Organization', 'Consortium'].map((type) => (
-                <button
-                  key={type}
-                  onClick={() => { setFormType(type); setError(''); }}
-                  className={`px-4 py-3 text-sm font-semibold transition duration-150 ease-in-out ${
-                    formType === type
-                      ? 'border-b-4 border-indigo-500 text-indigo-600'
-                      : 'border-b-4 border-transparent text-gray-500 hover:text-indigo-500 hover:border-indigo-200'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {formType === 'Individual' && renderIndividualForm()}
-              {formType === 'Organization' && renderOrganizationForm()}
-              {formType === 'Consortium' && renderConsortiumForm()}
-
-              <div className="pt-6 border-t border-gray-100">
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !isAuthReady}
-                  className={`w-full flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg transition duration-300 ${
-                    isSubmitting || !isAuthReady
-                      ? 'bg-indigo-300 cursor-not-allowed'
-                      : 'bg-indigo-600 hover:bg-indigo-700 text-white transform hover:scale-[1.01]'
-                  }`}
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <BookOpen className="w-5 h-5 mr-2" />
-                  )}
-                  {isSubmitting ? 'Submitting Application...' : `Submit ${formType} Application`}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* --- RIGHT COLUMN: SUBMISSIONS LIST --- */}
-          <div className="lg:col-span-1">
-            <div className="bg-white p-6 rounded-3xl shadow-xl border border-gray-200 sticky top-4">
-                <h2 className="text-xl font-bold mb-4 text-indigo-700 flex items-center">
-                    <List className="w-5 h-5 mr-2"/> Submitted Applications (<span id="submissions-count">{applications.length}</span>)
-                </h2>
-                <p className="text-sm text-gray-500 mb-4">
-                    This list updates in real-time. Click any entry to view full details.
-                </p>
-
-                {isLoading && (
-                    <p className="text-center py-4 text-gray-500 flex items-center justify-center">
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading applications...
-                    </p>
-                )}
-                
-                <div className="space-y-3 max-h-[80vh] overflow-y-auto pr-2">
-                    {applications.map((app) => (
-                        <div 
-                            key={app.id} 
-                            onClick={() => setExpandedId(app.id === expandedId ? null : app.id)}
-                            className={`p-4 border rounded-xl cursor-pointer transition duration-200 ${
-                                app.id === expandedId ? 'bg-indigo-50 border-indigo-300 shadow-md' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                            }`}
-                        >
-                            <div className="flex justify-between items-center">
-                                <div className="truncate">
-                                    <p className="text-sm font-bold text-gray-800 truncate">
-                                        {app.applicationType === 'Individual' && (app.fullName || 'Unnamed Individual')}
-                                        {app.applicationType === 'Organization' && (app.orgName || 'Unnamed Organization')}
-                                        {app.applicationType === 'Consortium' && (app.consortiumName || 'Unnamed Consortium')}
-                                    </p>
-                                    <p className="text-xs text-indigo-600 font-medium">
-                                        {app.applicationType}
-                                    </p>
-                                </div>
-                                <div className="flex items-center space-x-2 flex-shrink-0">
-                                    <span className="text-xs text-gray-500">
-                                        {formatTimestamp(app.submittedAt)}
-                                    </span>
-                                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${app.id === expandedId ? 'transform rotate-180' : ''}`} />
-                                </div>
-                            </div>
-                            
-                            <DetailedApplicationView app={app} isExpanded={app.id === expandedId} />
-                        </div>
-                    ))}
-                    {applications.length === 0 && !isLoading && (
-                        <p className="text-center py-8 text-gray-500 italic text-sm">No applications submitted yet. Be the first!</p>
-                    )}
-                </div>
-            </div>
-          </div>
-        </div>
-
-        {/* --- MANDATORY FOOTER DISCLAIMER --- */}
-        <footer className="mt-12 pt-6 border-t border-gray-300 text-center">
-            <p className="text-xs text-gray-500 max-w-3xl mx-auto">
-                This application form is administered by Intersect MBO for the Constitutional Committee snap election. Information submitted may be reviewed, verified, and publicly published to support election transparency and community oversight. By submitting this application, you acknowledge that all information provided is accurate to the best of your knowledge and consent to its use for governance, verification, and publication purposes. Submission does not guarantee placement in the Constitutional Commitee. For official updates, please follow @IntersectMBO across verified channels.
-            </p>
-        </footer>
-      </div>
-    </div>
-  );
-};
-
-export default App;
+<script src="app.js"></script>
+</body>
+</html>
