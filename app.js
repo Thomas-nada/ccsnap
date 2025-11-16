@@ -9,10 +9,7 @@ const MOTIVATION_LIMIT = 1000;
 const STORAGE_KEY = 'ccApplications';
 const USER_ID_KEY = 'ccUserId';
 
-// REGISTRATION WINDOW:
-// Start: Sunday, November 16, 2025, 21:53:00 UTC (Set to 5 minutes from 21:48 UTC)
-const REGISTRATION_START = new Date('2025-11-16T21:53:00Z').getTime();
-// Stop: November 25, 2025, 12:00 UTC
+// DEADLINE: November 25, 2025, 12:00 UTC
 const REGISTRATION_DEADLINE = new Date('2025-11-25T12:00:00Z').getTime();
 
 function getUserId() {
@@ -26,35 +23,6 @@ function getUserId() {
 
 const userId = getUserId();
 
-// ---------- Validation Helpers ----------
-
-/**
- * Basic email format validation.
- * @param {string} email
- * @returns {boolean}
- */
-function isValidEmail(email) {
-  if (!email) return false;
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return re.test(String(email).toLowerCase());
-}
-
-/**
- * Basic URL format validation.
- * @param {string} url
- * @returns {boolean}
- */
-function isValidUrl(url) {
-  if (!url) return true; // Allows optional URL fields to be empty
-  try {
-    // Attempt to create a URL object. If it fails, the format is invalid.
-    new URL(url);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
 // ---------- DOM Helpers ----------
 
 function createEl(tag, attrs = {}, children = []) {
@@ -67,7 +35,7 @@ function createEl(tag, attrs = {}, children = []) {
         el.dataset[dataKey] = dataVal;
       });
     } else if (key.startsWith('on') && typeof value === 'function') {
-      el.addEventListener(key.substring(2).toLowerCase(), value); // Corrected: use .toLowerCase() for event names
+      el.addEventListener(key.substring(2), value);
     } else if (value !== null && value !== undefined) {
       el.setAttribute(key, value);
     }
@@ -81,64 +49,6 @@ function createEl(tag, attrs = {}, children = []) {
   });
   return el;
 }
-
-/**
- * Creates a standard input form group (label + input + helper).
- */
-function createFormGroup({ label, name, type, required = false, placeholder = '', helper = '', value = '', onInput = null }) {
-  const group = createEl('div', { class: 'form-group' });
-  const labelEl = createEl('label', { for: name }, [label, required ? createEl('span', { style: 'color:#dc2626;' }, [' *']) : '']);
-  const inputAttrs = { type: type || 'text', id: name, name: name, placeholder: placeholder };
-  if (value) inputAttrs.value = value;
-  if (required) inputAttrs.required = true;
-  const inputEl = createEl('input', inputAttrs);
-  if (onInput) {
-    inputEl.addEventListener('input', onInput);
-  }
-  group.appendChild(labelEl);
-  group.appendChild(inputEl);
-  if (helper) {
-    group.appendChild(createEl('div', { class: 'helper-text' }, [helper]));
-  }
-  return group;
-}
-
-/**
- * Creates a textarea form group (label + textarea + helper).
- */
-function createTextareaGroup({ label, name, required = false, maxLength = null, rows = 3, helper = '', value = '', onInput = null }) {
-  const group = createEl('div', { class: 'form-group' });
-  const labelEl = createEl('label', { for: name }, [
-    label,
-    required ? createEl('span', { style: 'color:#dc2626;' }, [' *']) : '',
-    maxLength
-      ? createEl('span', { class: 'char-count', id: `${name}-char` }, [(value ? value.length : 0) + ' / ' + maxLength])
-      : '',
-  ]);
-  const textareaAttrs = { id: name, name: name, rows: rows };
-  if (value) textareaAttrs.value = value;
-  if (required) textareaAttrs.required = true;
-  if (maxLength) textareaAttrs.maxLength = maxLength;
-  const textareaEl = createEl('textarea', textareaAttrs);
-  textareaEl.addEventListener('input', (e) => {
-    if (maxLength) {
-      const counter = document.getElementById(`${name}-char`);
-      if (counter) {
-        counter.textContent = e.target.value.length + ' / ' + maxLength;
-      }
-    }
-    if (onInput) {
-      onInput(e);
-    }
-  });
-  group.appendChild(labelEl);
-  group.appendChild(textareaEl);
-  if (helper) {
-    group.appendChild(createEl('div', { class: 'helper-text' }, [helper]));
-  }
-  return group;
-}
-
 
 // ---------- State ----------
 
@@ -177,27 +87,9 @@ function switchForm(type) {
 function renderForm(type) {
   if (!formContainer) return;
   formContainer.innerHTML = '';
-  const now = Date.now();
-
-  // CHECK START TIME
-  if (now < REGISTRATION_START) {
-    formContainer.innerHTML = `
-      <div class="guide" style="text-align:center; padding: 3rem;">
-        <h3 style="color: var(--primary); border:none;">Registration Pending</h3>
-        <p>Candidate registration opens soon. Please check the countdown above.</p>
-        <p>The form will become available automatically when the election starts.</p>
-      </div>
-    `;
-    // Hide switch buttons and manual edit trigger when registration hasn't started
-    const switchNav = document.getElementById('form-switch');
-    if (switchNav) switchNav.style.display = 'none';
-    const manualTrigger = document.getElementById('btn-show-edit-input');
-    if (manualTrigger) manualTrigger.parentNode.style.display = 'none';
-    return;
-  }
 
   // CHECK DEADLINE
-  if (now > REGISTRATION_DEADLINE) {
+  if (Date.now() > REGISTRATION_DEADLINE) {
     formContainer.innerHTML = `
       <div class="guide" style="text-align:center; padding: 3rem;">
         <h3 style="color: #dc2626; border:none;">Registration Closed</h3>
@@ -212,12 +104,6 @@ function renderForm(type) {
     if (manualTrigger && manualTrigger.parentNode) manualTrigger.parentNode.style.display = 'none';
     return;
   }
-  
-  // If active, show forms and elements
-  const switchNav = document.getElementById('form-switch');
-  if (switchNav) switchNav.style.display = 'flex';
-  const manualTrigger = document.getElementById('btn-show-edit-input');
-  if (manualTrigger && !window.isEditMode) manualTrigger.parentNode.style.display = 'block';
 
   if (type === 'Individual') {
     renderIndividualForm();
@@ -231,7 +117,6 @@ function renderForm(type) {
 function showMessage(text, variant = 'error') {
   if (!messagesDiv) return;
   const el = createEl('div', { class: variant === 'error' ? 'error' : 'success' }, [text]);
-  messagesDiv.innerHTML = ''; // Clear previous messages
   messagesDiv.appendChild(el);
   setTimeout(() => {
     if (el.parentNode) {
@@ -332,8 +217,8 @@ function renderIndividualForm() {
     if (stepIndex === 0) {
       const nameInput = formContainer.querySelector('[name="fullName"]');
       const emailInput = formContainer.querySelector('[name="email"]');
-      if (!nameInput.value.trim() || !emailInput.value.trim() || !isValidEmail(emailInput.value.trim())) {
-        showMessage('Please fill out your full name and a valid email.', 'error');
+      if (!nameInput.value.trim() || !emailInput.value.trim()) {
+        showMessage('Please fill out your full name and email.', 'error');
         return false;
       }
       return true;
@@ -349,8 +234,8 @@ function renderIndividualForm() {
     if (stepIndex === 2) {
       const proofCheckbox = formContainer.querySelector('#hasPreviousIndividualProof');
       const proofUrl = formContainer.querySelector('#proofOfLifeLink');
-      if (!proofCheckbox.checked && (!proofUrl.value.trim() || !isValidUrl(proofUrl.value.trim()))) {
-        showMessage('Please provide a valid proof‑of‑life link or select the exemption.', 'error');
+      if (!proofCheckbox.checked && !proofUrl.value.trim()) {
+        showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
         return false;
       }
       return true;
@@ -360,7 +245,7 @@ function renderIndividualForm() {
       const exp = formContainer.querySelector('[name="experience"]');
       const trans = formContainer.querySelector('[name="transparencyApproach"]');
       if (!motiv.value.trim() || !exp.value.trim() || !trans.value.trim()) {
-        showMessage('Please fill out all required motivation, experience and transparency fields.', 'error');
+        showMessage('Please fill out motivation, experience and transparency approach.', 'error');
         return false;
       }
       return true;
@@ -372,19 +257,22 @@ function renderIndividualForm() {
 
 function handleSubmitIndividual(e) {
   e.preventDefault();
-  
-  // Final validation before submission
-  if (!validateIndividualStep(0) || !validateIndividualStep(1) || !validateIndividualStep(2) || !validateIndividualStep(3)) {
-      showMessage('Please correct the validation errors before submitting.', 'error');
-      return;
-  }
-  
   const formData = new FormData(formContainer);
   const data = {};
   formData.forEach((value, key) => {
     data[key] = value.trim();
   });
   data.hasPreviousIndividualProof = formContainer.querySelector('#hasPreviousIndividualProof').checked;
+
+  // Basic validation
+  if (!data.fullName || !data.email || !data.biography || !data.motivation || !data.experience || !data.transparencyApproach) {
+    showMessage('Please fill out all required fields.', 'error');
+    return;
+  }
+  if (!data.hasPreviousIndividualProof && !data.proofOfLifeLink) {
+    showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
+    return;
+  }
   
   const application = {
     applicationType: 'Individual',
@@ -419,7 +307,7 @@ function handleSubmitIndividual(e) {
   })
     .then((res) => {
       if (!res.ok) {
-        if (res.status === 403) throw new Error('Registration Closed/Pending');
+        if (res.status === 403) throw new Error('Registration Closed');
         throw new Error('Submission failed');
       }
       return res.json();
@@ -435,14 +323,15 @@ function handleSubmitIndividual(e) {
       
       switchForm('Individual');
       if (window.isEditMode) {
-        setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000); 
+        // FIX 1: Correct redirect path
+        setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000);
       } else {
         loadApplications();
       }
     })
     .catch((err) => {
       console.error(err);
-      showMessage(err.message === 'Registration Closed/Pending' ? 'Submission failed: Registration is currently unavailable.' : 'Failed to submit application to the server.', 'error');
+      showMessage(err.message === 'Registration Closed' ? 'Submission failed: Registration is closed.' : 'Failed to submit application to the server.', 'error');
     });
 }
 
@@ -535,8 +424,8 @@ function renderOrganizationForm() {
       const name = formContainer.querySelector('[name="orgName"]');
       const contact = formContainer.querySelector('[name="contactPerson"]');
       const email = formContainer.querySelector('[name="contactEmail"]');
-      if (!name.value.trim() || !contact.value.trim() || !email.value.trim() || !isValidEmail(email.value.trim())) {
-        showMessage('Please fill out organisation name, contact person and a valid contact email.', 'error');
+      if (!name.value.trim() || !contact.value.trim() || !email.value.trim()) {
+        showMessage('Please fill out organisation name, contact person and contact email.', 'error');
         return false;
       }
       return true;
@@ -552,8 +441,8 @@ function renderOrganizationForm() {
     if (stepIndex === 2) {
       const proofCheckbox = formContainer.querySelector('#hasPreviousOrgProof');
       const proofUrl = formContainer.querySelector('#orgProofOfLifeLink');
-      if (!proofCheckbox.checked && (!proofUrl.value.trim() || !isValidUrl(proofUrl.value.trim()))) {
-        showMessage('Please provide a valid proof‑of‑life link or select the exemption.', 'error');
+      if (!proofCheckbox.checked && (!proofUrl || !proofUrl.value.trim())) {
+        showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
         return false;
       }
       return true;
@@ -563,7 +452,7 @@ function renderOrganizationForm() {
       const transparency = formContainer.querySelector('[name="orgTransparencyApproach"]');
       const motivation = formContainer.querySelector('[name="orgMotivation"]');
       if (!experience.value.trim() || !transparency.value.trim() || !motivation.value.trim()) {
-        showMessage('Please fill out all required experience, transparency approach and motivation fields.', 'error');
+        showMessage('Please fill out experience, transparency approach and motivation.', 'error');
         return false;
       }
       return true;
@@ -575,13 +464,6 @@ function renderOrganizationForm() {
 
 function handleSubmitOrganisation(e) {
   e.preventDefault();
-  
-  // Final validation before submission
-  if (!validateOrganizationStep(0) || !validateOrganizationStep(1) || !validateOrganizationStep(2) || !validateOrganizationStep(3)) {
-      showMessage('Please correct the validation errors before submitting.', 'error');
-      return;
-  }
-  
   const formData = new FormData(formContainer);
   const data = {};
   formData.forEach((value, key) => {
@@ -589,6 +471,15 @@ function handleSubmitOrganisation(e) {
   });
   data.hasPreviousOrgProof = formContainer.querySelector('#hasPreviousOrgProof').checked;
   
+  if (!data.orgName || !data.contactPerson || !data.contactEmail || !data.orgDescription || !data.orgExperience || !data.orgTransparencyApproach || !data.orgMotivation) {
+    showMessage('Please fill out all required fields.', 'error');
+    return;
+  }
+  if (!data.hasPreviousOrgProof && !data.orgProofOfLifeLink) {
+    showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
+    return;
+  }
+
   const application = {
     applicationType: 'Organization',
     submittedAt: Date.now(),
@@ -619,7 +510,7 @@ function handleSubmitOrganisation(e) {
   })
     .then((res) => {
       if (!res.ok) {
-        if (res.status === 403) throw new Error('Registration Closed/Pending');
+        if (res.status === 403) throw new Error('Registration Closed');
         throw new Error('Submission failed');
       }
       return res.json();
@@ -634,6 +525,7 @@ function handleSubmitOrganisation(e) {
       }
       switchForm('Organization');
       if (window.isEditMode) {
+        // Correct redirect path
         setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000);
       } else {
         loadApplications();
@@ -641,7 +533,7 @@ function handleSubmitOrganisation(e) {
     })
     .catch((err) => {
       console.error(err);
-      showMessage(err.message === 'Registration Closed/Pending' ? 'Submission failed: Registration is currently unavailable.' : 'Failed to submit application to the server.', 'error');
+      showMessage(err.message === 'Registration Closed' ? 'Submission failed: Registration is closed.' : 'Failed to submit application to the server.', 'error');
     });
 }
 
@@ -663,7 +555,7 @@ function renderConsortiumForm() {
   step1.appendChild(createTextareaGroup({ label: 'Values', name: 'consortiumValues', required: false, rows: 3, helper: 'Optional – describe core values of the consortium.' }));
   steps.push(step1);
   
-  // Step 2: Proof-of-Life (Contact Person)
+  // Step 2: Proof-of-Life (Contact Person) -- NEW STEP
   const step2 = createEl('div', { class: 'form-step', dataset: { step: 2 } });
   
   // Proof of Life Input Group
@@ -701,14 +593,14 @@ function renderConsortiumForm() {
   consCheckbox.addEventListener('change', toggleConsProofVisibility);
   toggleConsProofVisibility();
 
-  // Step 3: Motivation & Experience
+  // Step 3: Motivation & Experience (Previously Step 2)
   const step3 = createEl('div', { class: 'form-step', dataset: { step: 3 } });
   step3.appendChild(createTextareaGroup({ label: 'Motivation for Serving', name: 'consortiumMotivation', required: true, maxLength: MOTIVATION_LIMIT, rows: 4, helper: `Explain why your consortium wants to serve (max ${MOTIVATION_LIMIT} characters).` }));
   step3.appendChild(createTextareaGroup({ label: 'Relevant Governance or Constitutional Experience', name: 'consortiumExperience', required: true, rows: 4, helper: 'Describe any past experience in governance, law or policy.' }));
   step3.appendChild(createTextareaGroup({ label: 'Communication & Transparency Approach', name: 'consortiumTransparencyApproach', required: true, rows: 4, helper: 'Describe your plan for communication and transparency.' }));
   steps.push(step3);
   
-  // Step 4: Members
+  // Step 4: Members (Previously Step 3)
   const step4 = createEl('div', { class: 'form-step', dataset: { step: 4 } });
   function renderMembers() {
     step4.innerHTML = '';
@@ -772,8 +664,8 @@ function renderConsortiumForm() {
       const name = formContainer.querySelector('[name="consortiumName"]');
       const contact = formContainer.querySelector('[name="consortiumContactPerson"]');
       const email = formContainer.querySelector('[name="consortiumContactEmail"]');
-      if (!name.value.trim() || !contact.value.trim() || !email.value.trim() || !isValidEmail(email.value.trim())) {
-        showMessage('Please fill out consortium name, contact person and a valid contact email.', 'error');
+      if (!name.value.trim() || !contact.value.trim() || !email.value.trim()) {
+        showMessage('Please fill out consortium name, contact person and email.', 'error');
         return false;
       }
       return true;
@@ -786,8 +678,8 @@ function renderConsortiumForm() {
     if (stepIndex === 2) {
         const proofCheckbox = formContainer.querySelector('#hasPreviousConsortiumProof');
         const proofUrl = formContainer.querySelector('#consortiumProofOfLifeLink');
-        if (!proofCheckbox.checked && (!proofUrl.value.trim() || !isValidUrl(proofUrl.value.trim()))) {
-          showMessage('Please provide a valid contact person\'s proof‑of‑life link or select the exemption.', 'error');
+        if (!proofCheckbox.checked && (!proofUrl || !proofUrl.value.trim())) {
+          showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
           return false;
         }
         return true;
@@ -798,7 +690,7 @@ function renderConsortiumForm() {
       const exp = formContainer.querySelector('[name="consortiumExperience"]');
       const trans = formContainer.querySelector('[name="consortiumTransparencyApproach"]');
       if (!mot.value.trim() || !exp.value.trim() || !trans.value.trim()) {
-        showMessage('Please fill out all required motivation, experience and transparency fields.', 'error');
+        showMessage('Please fill out motivation, experience and transparency approach.', 'error');
         return false;
       }
       return true;
@@ -815,10 +707,7 @@ function renderConsortiumForm() {
           showMessage(`Member ${i + 1}: name and biography are required.`, 'error');
           return false;
         }
-        if (m.socialProfile && !isValidUrl(m.socialProfile)) {
-            showMessage(`Member ${i + 1}: Social Profile Link must be a valid URL.`, 'error');
-            return false;
-        }
+        // REMOVED member proof validation
       }
       return true;
     }
@@ -836,6 +725,7 @@ function createEmptyMember() {
     stakeId: '',
     dRepId: '',
     socialProfile: '',
+    // Removed proof fields
   };
 }
 
@@ -863,19 +753,14 @@ function renderMemberForm(container, index, renderMembersCallback = null) {
   card.appendChild(createFormGroup({ label: 'dRep ID (if any)', name: `memberDRepId${index}`, type: 'text', required: false, placeholder: 'dRep ID', value: member.dRepId, onInput: (e) => { consortiumMembers[index].dRepId = e.target.value; } }));
   card.appendChild(createFormGroup({ label: 'Social Profile Link (if any)', name: `memberSocialProfile${index}`, type: 'url', required: false, placeholder: 'https://', value: member.socialProfile, onInput: (e) => { consortiumMembers[index].socialProfile = e.target.value; } }));
   
+  // Removed Proof of Life UI for members
+  
   container.appendChild(card);
 }
 
 function handleSubmitConsortium(e) {
   e.preventDefault();
-  
-  // Final validation before submission
-  if (!validateConsortiumStep(0) || !validateConsortiumStep(1) || !validateConsortiumStep(2) || !validateConsortiumStep(3) || !validateConsortiumStep(4)) {
-      showMessage('Please correct the validation errors before submitting.', 'error');
-      return;
-  }
-  
-  const formData = new FormData(formContainer); 
+  const formData = new FormData(formContainer); // To get standard fields if needed, but using manual collection below
   const data = {};
   const fields = ['consortiumName', 'consortiumContactPerson', 'consortiumContactEmail', 'consortiumMission', 'consortiumValues', 'consortiumMotivation', 'consortiumExperience', 'consortiumTransparencyApproach'];
   fields.forEach((field) => {
@@ -888,19 +773,31 @@ function handleSubmitConsortium(e) {
   const proofInput = formContainer.querySelector('#consortiumProofOfLifeLink');
   data.consortiumProofOfLifeLink = proofInput ? proofInput.value.trim() : '';
 
+  if (!data.consortiumName || !data.consortiumContactPerson || !data.consortiumContactEmail || !data.consortiumMotivation || !data.consortiumExperience || !data.consortiumTransparencyApproach) {
+    showMessage('Please fill out all required fields.', 'error');
+    return;
+  }
   
-  const membersData = consortiumMembers.map((m) => {
-      return {
-          name: m.name.trim(),
-          geographicRep: m.geographicRep.trim(),
-          biography: m.biography.trim(),
-          conflictOfInterest: m.conflictOfInterest.trim(),
-          stakeId: m.stakeId.trim(),
-          dRepId: m.dRepId.trim(),
-          socialProfile: m.socialProfile.trim(),
-      };
-  });
+  if (!data.hasPreviousConsortiumProof && !data.consortiumProofOfLifeLink) {
+    showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
+    return;
+  }
 
+  if (consortiumMembers.length === 0) {
+    showMessage('Please add at least one consortium member.', 'error');
+    return;
+  }
+  
+  const membersData = consortiumMembers.map((m) => ({
+    name: m.name.trim(),
+    geographicRep: m.geographicRep.trim(),
+    biography: m.biography.trim(),
+    conflictOfInterest: m.conflictOfInterest.trim(),
+    stakeId: m.stakeId.trim(),
+    dRepId: m.dRepId.trim(),
+    socialProfile: m.socialProfile.trim(),
+    // Removed PoL fields
+  }));
 
   const application = {
     applicationType: 'Consortium',
@@ -933,7 +830,7 @@ function handleSubmitConsortium(e) {
   })
     .then((res) => {
       if (!res.ok) {
-        if (res.status === 403) throw new Error('Registration Closed/Pending');
+        if (res.status === 403) throw new Error('Registration Closed');
         throw new Error('Submission failed');
       }
       return res.json();
@@ -950,6 +847,7 @@ function handleSubmitConsortium(e) {
       consortiumMembers = [];
       switchForm('Consortium');
       if (window.isEditMode) {
+        // Correct redirect path
         setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000);
       } else {
         loadApplications();
@@ -957,7 +855,7 @@ function handleSubmitConsortium(e) {
     })
     .catch((err) => {
       console.error(err);
-      showMessage(err.message === 'Registration Closed/Pending' ? 'Submission failed: Registration is currently unavailable.' : err.message, 'error');
+      showMessage(err.message === 'Registration Closed' ? 'Submission failed: Registration is closed.' : 'Failed to submit application to the server.', 'error');
     });
 }
 
@@ -1134,6 +1032,7 @@ function buildApplicationDetails(app) {
           ]),
         );
       }
+      // Removed Member PoL Display
       container.appendChild(memberCard);
     });
   }
@@ -1168,56 +1067,50 @@ function closeApplicationModal() {
   modal.classList.add('hidden');
 }
 
-function copyToClipboard(text) {
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).then(() => {
-      console.log('Copied Secret Token (Modern API)');
-      showMessage('Token copied!', 'success');
-    }).catch(err => {
-      console.error('Could not copy text using modern API: ', err);
-      fallbackCopyTextToClipboard(text);
-    });
-  } else {
-    fallbackCopyTextToClipboard(text);
-  }
+/**
+ * Executes a highly reliable copy-to-clipboard function using the document.execCommand fallback.
+ * @param {string} text The text to copy (optional, used for error logging).
+ * @param {HTMLInputElement} inputEl The input element containing the text to copy.
+ */
+function copyTokenToClipboard(text, inputEl) {
+    if (!inputEl) {
+        showMessage('Error: Copy element not found.', 'error');
+        return;
+    }
+    
+    // 1. Ensure the element is visible and selectable.
+    inputEl.select(); 
+    inputEl.setSelectionRange(0, 99999); // For mobile devices
+
+    // 2. Execute the copy command directly.
+    let successful = false;
+    try {
+        successful = document.execCommand('copy');
+    } catch (err) {
+        console.error('Copy command failed:', err);
+    }
+
+    // 3. Provide feedback.
+    if (successful) {
+        showMessage('Token copied!', 'success');
+    } else {
+        // Fallback notification if document.execCommand fails
+        showMessage('Could not copy token automatically. Please copy the highlighted text manually.', 'error');
+    }
 }
 
-function fallbackCopyTextToClipboard(text) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'absolute';
-  textarea.style.left = '-9999px'; 
-  document.body.appendChild(textarea);
-  
-  textarea.select();
-  
-  let successful = false;
-  try {
-    successful = document.execCommand('copy');
-  } catch (err) {
-    console.error('Could not copy text using fallback method: ', err);
-  }
-  
-  document.body.removeChild(textarea);
-
-  if (successful) {
-    showMessage('Token copied! (Using fallback method)', 'success');
-  } else {
-    showMessage('Could not copy token. Please copy it manually.', 'error');
-  }
-}
-
-// Updated: Shows separate Entry ID and Token inputs + Confetti!
+// Updated: Shows only Secret Token with working Copy button
 function openSuccessModal(message, entryId = null, editToken = null) {
+  // --- ADD CONFETTI HERE ---
   if (typeof confetti === 'function') {
     confetti({
       particleCount: 150,
       spread: 70,
       origin: { y: 0.6 },
-      colors: ['#0033ad', '#1a5dd6', '#00a3c4', '#ffffff'] 
+      colors: ['#0033ad', '#1a5dd6', '#00a3c4', '#ffffff'] // Your brand colours!
     });
   }
+  // -------------------------
 
   const modal = document.getElementById('success-modal');
   if (!modal) return;
@@ -1234,16 +1127,11 @@ function openSuccessModal(message, entryId = null, editToken = null) {
   
   if (entryId && editToken) {
     content.appendChild(createEl('hr', { style: 'margin: 1rem 0; border: 0; border-top: 1px solid #eee;' }));
-    content.appendChild(createEl('p', { style: 'font-weight: 600; margin-bottom: 0.5rem;' }, ['Save these credentials to edit later:']));
+    content.appendChild(createEl('p', { style: 'font-weight: 600; margin-bottom: 0.5rem;' }, ['Save this credential to edit later:']));
     
-    // Entry ID
-    content.appendChild(createEl('label', { style: 'font-size: 0.8rem; display:block; margin-bottom:0.25rem;' }, ['Entry ID']));
-    const idInput = createEl('input', { type: 'text', value: entryId, readonly: true, style: 'width: 100%; margin-bottom: 0.75rem; font-size: 0.9rem; background: #f9fafb; cursor: text;' });
-    idInput.addEventListener('click', () => idInput.select());
-    content.appendChild(idInput);
-
-    // Edit Token
+    // Secret Token 
     content.appendChild(createEl('label', { style: 'font-size: 0.8rem; display:block; margin-bottom:0.25rem;' }, ['Secret Token']));
+    
     const tokenContainer = createEl('div', { style: 'display: flex; gap: 0.5rem; margin-bottom: 0.75rem;' });
     const tokenInput = createEl('input', { 
         type: 'text', 
@@ -1252,15 +1140,21 @@ function openSuccessModal(message, entryId = null, editToken = null) {
         id: 'token-to-copy',
         style: 'flex-grow: 1; font-size: 0.9rem; background: #f9fafb; cursor: text;' 
     });
-    tokenInput.addEventListener('click', () => tokenInput.select());
+    // This listener allows manual selection/copy when clicking the input field
+    tokenInput.addEventListener('click', () => tokenInput.select()); 
     
+    // Create the copy button 
     const copyBtn = createEl('button', { 
         type: 'button', 
         class: 'btn secondary', 
-        style: 'padding: 0.6rem 0.75rem; font-size: 0.85rem; white-space: nowrap;',
-        onClick: () => copyToClipboard(editToken)
+        style: 'padding: 0.6rem 0.75rem; font-size: 0.85rem; white-space: nowrap;'
     }, ['Copy']);
 
+    // *** FINAL FIX: Attach the listener directly to the new robust function ***
+    copyBtn.addEventListener('click', () => {
+        copyTokenToClipboard(editToken, tokenInput);
+    }); 
+    
     tokenContainer.appendChild(tokenInput);
     tokenContainer.appendChild(copyBtn);
     content.appendChild(tokenContainer);
@@ -1347,19 +1241,7 @@ if (applicationsList) {
   loadApplications();
 }
 if (formContainer) {
-  // If not in edit mode, ensure a form type is selected to render the initial form.
-  if (!window.isEditMode) {
-    currentFormType = currentFormType || 'Individual';
-    // Manually set the active button state for the default form type
-    const defaultBtn = document.querySelector('#btn-individual');
-    if (defaultBtn) {
-        formSwitchButtons.forEach(btn => btn.classList.remove('active'));
-        defaultBtn.classList.add('active');
-    }
-  }
-  
-  // Render the form
-  renderForm(currentFormType || 'Individual'); 
+  renderForm(currentFormType);
 }
 
 const modalEl = document.getElementById('application-modal');
@@ -1395,11 +1277,14 @@ if (btnShowEdit) {
 const btnLoadManual = document.getElementById('btn-load-manual-edit');
 if (btnLoadManual) {
   btnLoadManual.addEventListener('click', () => {
+    // const idInput = document.getElementById('manual-entry-id');
     const tokenInput = document.getElementById('manual-edit-token');
+    // const entryId = idInput.value.trim();
     const token = tokenInput.value.trim();
 
+    // NOTE: Changed alert() to showMessage()
     if (!token) {
-      showMessage('Please enter your Secret Token.', 'error'); 
+      showMessage('Please enter your Secret Token.', 'error');
       return;
     }
 
@@ -1415,29 +1300,27 @@ if (btnLoadManual) {
     .then(app => {
       if (!app || !app.data) return;
 
+      // Success finding app. Enable edit mode.
       window.isEditMode = true;
       window.editEntryId = app.entryId;
       window.editToken = token;
 
+      // Hide manual container
       document.getElementById('manual-edit-container').classList.add('hidden');
-      document.getElementById('btn-show-edit-input').classList.add('hidden'); 
+      document.getElementById('btn-show-edit-input').classList.add('hidden'); // Hide the toggle button too
 
+      // Show edit banner
       document.getElementById('edit-banner').classList.remove('hidden');
       
+      // Disable switcher
       formSwitchButtons.forEach(btn => btn.disabled = true);
 
+      // Setup Consortium array if needed
       if (app.applicationType === 'Consortium') {
         consortiumMembers = app.data.consortiumMembers || [];
       }
 
-      formSwitchButtons.forEach((btn) => {
-        btn.classList.remove('active');
-        if (btn.dataset.type === app.applicationType) {
-            btn.classList.add('active');
-        }
-      });
-
-      // RENDER FORM (This calls renderForm)
+      // Render form
       switchForm(app.applicationType);
       populateForm(app.applicationType, app.data);
 
@@ -1445,20 +1328,14 @@ if (btnLoadManual) {
     })
     .catch(err => {
       console.error('Failed to load:', err);
-      showMessage('Could not find application with that token.', 'error'); 
+      showMessage('Could not find application with that ID.', 'error');
     });
   });
 }
 
 // --- Handle Edit Mode Logic on Page Load (Legacy Link Support) ---
 document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('application-form')) {
-      // Only call loadApplications if we are on the candidates page
-      if (document.getElementById('applications-list')) {
-        loadApplications(); 
-      }
-      return;
-  }
+  if (!document.getElementById('application-form')) return;
 
   const params = new URLSearchParams(window.location.search);
   const entryId = params.get('entryId');
@@ -1466,15 +1343,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (!entryId || !token) return;
 
+  // Hide the manual button if using link
   if (btnShowEdit) btnShowEdit.classList.add('hidden');
 
   const banner = document.getElementById('edit-banner');
   if (banner) banner.classList.remove('hidden');
-  
-  // Disable switch buttons immediately if we detect an edit link
-  if (formSwitchButtons) {
-      formSwitchButtons.forEach(btn => btn.disabled = true);
-  }
 
   window.isEditMode = true;
   window.editEntryId = entryId;
@@ -1491,16 +1364,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (app.applicationType === 'Consortium') {
         consortiumMembers = app.data.consortiumMembers || [];
       }
-      
-      // Manually set active state for the loaded form type
-      formSwitchButtons.forEach((btn) => {
-        btn.classList.remove('active');
-        if (btn.dataset.type === app.applicationType) {
-            btn.classList.add('active');
-        }
-      });
 
-      // RENDER FORM (This calls renderForm)
       switchForm(app.applicationType);
       populateForm(app.applicationType, app.data);
     })
@@ -1515,39 +1379,19 @@ function initElectionClock() {
   const clockEl = document.getElementById('election-clock');
   if (!clockEl) return;
 
+  // Update every second
   setInterval(updateClock, 1000);
-  updateClock(); 
+  updateClock(); // Initial call
 
   function updateClock() {
     const now = new Date().getTime();
-    
-    // --- PHASE 1: BEFORE START ---
-    if (now < REGISTRATION_START) {
-      const distance = REGISTRATION_START - now;
-      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-      
-      clockEl.textContent = `REGISTRATION OPENS IN: ${days}d ${hours}h ${minutes}m ${seconds}s`;
-      clockEl.style.backgroundColor = "var(--primary-dark)"; 
-      
-      // Auto-refresh the form if the start time has just passed (within 1 second)
-      if (distance < 1000) {
-          window.location.reload(); 
-      }
-      return;
-    }
+    const distance = REGISTRATION_DEADLINE - now;
 
-    // --- PHASE 3: CLOSED ---
-    if (now > REGISTRATION_DEADLINE) {
+    if (distance < 0) {
       clockEl.textContent = "REGISTRATION IS CLOSED";
       clockEl.style.backgroundColor = "#dc2626"; // Red for closed
       return;
     }
-    
-    // --- PHASE 2: ACTIVE ---
-    const distance = REGISTRATION_DEADLINE - now;
 
     // Time calculations
     const days = Math.floor(distance / (1000 * 60 * 60 * 24));
@@ -1555,11 +1399,11 @@ function initElectionClock() {
     const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-    clockEl.textContent = `TIME REMAINING TO REGISTER: ${days}d ${hours}h ${minutes}m ${seconds}s`;
-    clockEl.style.backgroundColor = "var(--accent)"; // Blue/Cyan for active
+    clockEl.textContent = `Time remaining to register: ${days}d ${hours}h ${minutes}m ${seconds}s`;
   }
 }
 
+// Initialize clock on load
 if (document.getElementById('election-clock')) {
   initElectionClock();
 }
