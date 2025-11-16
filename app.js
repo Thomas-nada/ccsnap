@@ -9,7 +9,10 @@ const MOTIVATION_LIMIT = 1000;
 const STORAGE_KEY = 'ccApplications';
 const USER_ID_KEY = 'ccUserId';
 
-// DEADLINE: November 25, 2025, 12:00 UTC
+// REGISTRATION WINDOW:
+// Start: Sunday, November 16, 2025, 21:53:00 UTC (Set to 5 minutes from 21:48 UTC)
+const REGISTRATION_START = new Date('2025-11-16T21:53:00Z').getTime();
+// Stop: November 25, 2025, 12:00 UTC
 const REGISTRATION_DEADLINE = new Date('2025-11-25T12:00:00Z').getTime();
 
 function getUserId() {
@@ -117,8 +120,6 @@ function createTextareaGroup({ label, name, required = false, maxLength = null, 
   if (required) textareaAttrs.required = true;
   if (maxLength) textareaAttrs.maxLength = maxLength;
   const textareaEl = createEl('textarea', textareaAttrs);
-  textareaEl.value = value; // Set value explicitly for textarea
-  
   textareaEl.addEventListener('input', (e) => {
     if (maxLength) {
       const counter = document.getElementById(`${name}-char`);
@@ -175,12 +176,28 @@ function switchForm(type) {
 
 function renderForm(type) {
   if (!formContainer) return;
-  
-  // CRITICAL FIX: Ensure container is cleared before rendering.
-  formContainer.innerHTML = ''; 
+  formContainer.innerHTML = '';
+  const now = Date.now();
+
+  // CHECK START TIME
+  if (now < REGISTRATION_START) {
+    formContainer.innerHTML = `
+      <div class="guide" style="text-align:center; padding: 3rem;">
+        <h3 style="color: var(--primary); border:none;">Registration Pending</h3>
+        <p>Candidate registration opens soon. Please check the countdown above.</p>
+        <p>The form will become available automatically when the election starts.</p>
+      </div>
+    `;
+    // Hide switch buttons and manual edit trigger when registration hasn't started
+    const switchNav = document.getElementById('form-switch');
+    if (switchNav) switchNav.style.display = 'none';
+    const manualTrigger = document.getElementById('btn-show-edit-input');
+    if (manualTrigger) manualTrigger.parentNode.style.display = 'none';
+    return;
+  }
 
   // CHECK DEADLINE
-  if (Date.now() > REGISTRATION_DEADLINE) {
+  if (now > REGISTRATION_DEADLINE) {
     formContainer.innerHTML = `
       <div class="guide" style="text-align:center; padding: 3rem;">
         <h3 style="color: #dc2626; border:none;">Registration Closed</h3>
@@ -195,6 +212,12 @@ function renderForm(type) {
     if (manualTrigger && manualTrigger.parentNode) manualTrigger.parentNode.style.display = 'none';
     return;
   }
+  
+  // If active, show forms and elements
+  const switchNav = document.getElementById('form-switch');
+  if (switchNav) switchNav.style.display = 'flex';
+  const manualTrigger = document.getElementById('btn-show-edit-input');
+  if (manualTrigger && !window.isEditMode) manualTrigger.parentNode.style.display = 'block';
 
   if (type === 'Individual') {
     renderIndividualForm();
@@ -224,7 +247,7 @@ function renderIndividualForm() {
   
   const step0 = createEl('div', { class: 'form-step', dataset: { step: 0 } });
   step0.appendChild(createFormGroup({ label: 'Full Name or Alias', name: 'fullName', type: 'text', required: true, placeholder: 'Satoshi Nakamoto' }));
-  step0.appendChild(createFormGroup({ label: 'Contact Email', name: 'email', type: 'email', required: true, placeholder: 'your@email.com' })); // type="email"
+  step0.appendChild(createFormGroup({ label: 'Contact Email', name: 'email', type: 'email', required: true, placeholder: 'your@email.com' }));
   step0.appendChild(createFormGroup({ label: 'Geographic Representation', name: 'geographicRep', type: 'text', required: false, placeholder: 'Europe, Asia, etc.', helper: 'Optional – your region or area represented.' }));
   steps.push(step0);
 
@@ -240,7 +263,7 @@ function renderIndividualForm() {
   const proofGroup = createEl('div', { class: 'form-group' });
   const proofLabel = createEl('label', { for: 'proofOfLifeLink' }, ['Proof‑of‑Life Video Link ', createEl('span', { style: 'color:#dc2626;' }, ['*'])]);
   proofGroup.appendChild(proofLabel);
-  const proofInput = createEl('input', { type: 'url', id: 'proofOfLifeLink', name: 'proofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' }); // type="url"
+  const proofInput = createEl('input', { type: 'url', id: 'proofOfLifeLink', name: 'proofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' });
   proofGroup.appendChild(proofInput);
   const exemptionDiv = createEl('div', { class: 'form-group' });
   const exemptionCheckbox = createEl('input', { type: 'checkbox', id: 'hasPreviousIndividualProof', name: 'hasPreviousIndividualProof' });
@@ -288,9 +311,7 @@ function renderIndividualForm() {
   });
 
   nextBtn.addEventListener('click', () => {
-    // CRITICAL FIX: Validate BEFORE advancing the step
-    if (!validateIndividualStep(current)) return; 
-    
+    if (!validateIndividualStep(current)) return;
     if (current < steps.length - 1) {
       current++;
       showStep(current);
@@ -311,42 +332,26 @@ function renderIndividualForm() {
     if (stepIndex === 0) {
       const nameInput = formContainer.querySelector('[name="fullName"]');
       const emailInput = formContainer.querySelector('[name="email"]');
-
-      if (!nameInput.value.trim()) {
-        showMessage('Please enter your full name or alias.', 'error');
-        return false;
-      }
-      if (!isValidEmail(emailInput.value.trim())) {
-        showMessage('Please enter a valid contact email address.', 'error');
+      if (!nameInput.value.trim() || !emailInput.value.trim() || !isValidEmail(emailInput.value.trim())) {
+        showMessage('Please fill out your full name and a valid email.', 'error');
         return false;
       }
       return true;
     }
     if (stepIndex === 1) {
       const bioInput = formContainer.querySelector('[name="biography"]');
-      const socialInput = formContainer.querySelector('[name="socialProfile"]');
-
       if (!bioInput.value.trim()) {
         showMessage('Please provide your biography.', 'error');
         return false;
-      }
-      if (socialInput.value.trim() && !isValidUrl(socialInput.value.trim())) {
-          showMessage('The Social Profile Link must be a valid URL.', 'error');
-          return false;
       }
       return true;
     }
     if (stepIndex === 2) {
       const proofCheckbox = formContainer.querySelector('#hasPreviousIndividualProof');
       const proofUrl = formContainer.querySelector('#proofOfLifeLink');
-
-      if (!proofCheckbox.checked && !proofUrl.value.trim()) {
-        showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
+      if (!proofCheckbox.checked && (!proofUrl.value.trim() || !isValidUrl(proofUrl.value.trim()))) {
+        showMessage('Please provide a valid proof‑of‑life link or select the exemption.', 'error');
         return false;
-      }
-      if (!proofCheckbox.checked && !isValidUrl(proofUrl.value.trim())) {
-          showMessage('The Proof-of-Life link must be a valid URL.', 'error');
-          return false;
       }
       return true;
     }
@@ -370,7 +375,6 @@ function handleSubmitIndividual(e) {
   
   // Final validation before submission
   if (!validateIndividualStep(0) || !validateIndividualStep(1) || !validateIndividualStep(2) || !validateIndividualStep(3)) {
-      // Re-show the first failing step if needed, but for now just prevent submission
       showMessage('Please correct the validation errors before submitting.', 'error');
       return;
   }
@@ -381,7 +385,7 @@ function handleSubmitIndividual(e) {
     data[key] = value.trim();
   });
   data.hasPreviousIndividualProof = formContainer.querySelector('#hasPreviousIndividualProof').checked;
-
+  
   const application = {
     applicationType: 'Individual',
     submittedAt: Date.now(),
@@ -415,7 +419,7 @@ function handleSubmitIndividual(e) {
   })
     .then((res) => {
       if (!res.ok) {
-        if (res.status === 403) throw new Error('Registration Closed');
+        if (res.status === 403) throw new Error('Registration Closed/Pending');
         throw new Error('Submission failed');
       }
       return res.json();
@@ -438,7 +442,7 @@ function handleSubmitIndividual(e) {
     })
     .catch((err) => {
       console.error(err);
-      showMessage(err.message === 'Registration Closed' ? 'Submission failed: Registration is closed.' : 'Failed to submit application to the server.', 'error');
+      showMessage(err.message === 'Registration Closed/Pending' ? 'Submission failed: Registration is currently unavailable.' : 'Failed to submit application to the server.', 'error');
     });
 }
 
@@ -450,7 +454,7 @@ function renderOrganizationForm() {
   const step0 = createEl('div', { class: 'form-step', dataset: { step: 0 } });
   step0.appendChild(createFormGroup({ label: 'Organisation Name', name: 'orgName', type: 'text', required: true, placeholder: 'Cardano Association' }));
   step0.appendChild(createFormGroup({ label: 'Contact Person', name: 'contactPerson', type: 'text', required: true, placeholder: 'Jane Doe' }));
-  step0.appendChild(createFormGroup({ label: 'Contact Email', name: 'contactEmail', type: 'email', required: true, placeholder: 'contact@organisation.com' })); // type="email"
+  step0.appendChild(createFormGroup({ label: 'Contact Email', name: 'contactEmail', type: 'email', required: true, placeholder: 'contact@organisation.com' }));
   steps.push(step0);
   
   const step1 = createEl('div', { class: 'form-step', dataset: { step: 1 } });
@@ -461,7 +465,7 @@ function renderOrganizationForm() {
   const step2 = createEl('div', { class: 'form-step', dataset: { step: 2 } });
   const orgProofGroup = createEl('div', { class: 'form-group' });
   orgProofGroup.appendChild(createEl('label', { for: 'orgProofOfLifeLink' }, ['Proof‑of‑Life Video Link ', createEl('span', { style: 'color:#dc2626;' }, ['*'])]));
-  const orgProofInput = createEl('input', { type: 'url', id: 'orgProofOfLifeLink', name: 'orgProofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' }); // type="url"
+  const orgProofInput = createEl('input', { type: 'url', id: 'orgProofOfLifeLink', name: 'orgProofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' });
   orgProofGroup.appendChild(orgProofInput);
   const orgExemptionDiv = createEl('div', { class: 'form-group' });
   const orgCheckbox = createEl('input', { type: 'checkbox', id: 'hasPreviousOrgProof', name: 'hasPreviousOrgProof' });
@@ -509,9 +513,7 @@ function renderOrganizationForm() {
   });
 
   nextBtn.addEventListener('click', () => {
-    // CRITICAL FIX: Validate BEFORE advancing the step
     if (!validateOrganizationStep(current)) return;
-    
     if (current < steps.length - 1) {
       current++;
       showStep(current);
@@ -533,17 +535,8 @@ function renderOrganizationForm() {
       const name = formContainer.querySelector('[name="orgName"]');
       const contact = formContainer.querySelector('[name="contactPerson"]');
       const email = formContainer.querySelector('[name="contactEmail"]');
-      
-      if (!name.value.trim()) {
-        showMessage('Please enter the organisation name.', 'error');
-        return false;
-      }
-      if (!contact.value.trim()) {
-        showMessage('Please enter the contact person\'s name.', 'error');
-        return false;
-      }
-      if (!isValidEmail(email.value.trim())) {
-        showMessage('Please enter a valid organisation contact email address.', 'error');
+      if (!name.value.trim() || !contact.value.trim() || !email.value.trim() || !isValidEmail(email.value.trim())) {
+        showMessage('Please fill out organisation name, contact person and a valid contact email.', 'error');
         return false;
       }
       return true;
@@ -559,16 +552,9 @@ function renderOrganizationForm() {
     if (stepIndex === 2) {
       const proofCheckbox = formContainer.querySelector('#hasPreviousOrgProof');
       const proofUrl = formContainer.querySelector('#orgProofOfLifeLink');
-      
-      if (!proofCheckbox.checked) {
-        if (!proofUrl.value.trim()) {
-          showMessage('Please provide a proof‑of‑life link or select the exemption.', 'error');
-          return false;
-        }
-        if (!isValidUrl(proofUrl.value.trim())) {
-          showMessage('The Proof-of-Life link must be a valid URL.', 'error');
-          return false;
-        }
+      if (!proofCheckbox.checked && (!proofUrl.value.trim() || !isValidUrl(proofUrl.value.trim()))) {
+        showMessage('Please provide a valid proof‑of‑life link or select the exemption.', 'error');
+        return false;
       }
       return true;
     }
@@ -603,7 +589,6 @@ function handleSubmitOrganisation(e) {
   });
   data.hasPreviousOrgProof = formContainer.querySelector('#hasPreviousOrgProof').checked;
   
-
   const application = {
     applicationType: 'Organization',
     submittedAt: Date.now(),
@@ -634,7 +619,7 @@ function handleSubmitOrganisation(e) {
   })
     .then((res) => {
       if (!res.ok) {
-        if (res.status === 403) throw new Error('Registration Closed');
+        if (res.status === 403) throw new Error('Registration Closed/Pending');
         throw new Error('Submission failed');
       }
       return res.json();
@@ -649,14 +634,14 @@ function handleSubmitOrganisation(e) {
       }
       switchForm('Organization');
       if (window.isEditMode) {
-        setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000); // Updated redirect
+        setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000);
       } else {
         loadApplications();
       }
     })
     .catch((err) => {
       console.error(err);
-      showMessage(err.message === 'Registration Closed' ? 'Submission failed: Registration is closed.' : 'Failed to submit application to the server.', 'error');
+      showMessage(err.message === 'Registration Closed/Pending' ? 'Submission failed: Registration is currently unavailable.' : 'Failed to submit application to the server.', 'error');
     });
 }
 
@@ -665,30 +650,36 @@ function renderConsortiumForm() {
   const form = formContainer;
   const steps = [];
   
+  // Step 0: Identity
   const step0 = createEl('div', { class: 'form-step', dataset: { step: 0 } });
   step0.appendChild(createFormGroup({ label: 'Consortium Name', name: 'consortiumName', type: 'text', required: true, placeholder: 'Consortium of Innovators' }));
   step0.appendChild(createFormGroup({ label: 'Contact Person', name: 'consortiumContactPerson', type: 'text', required: true, placeholder: 'Jane Doe' }));
-  step0.appendChild(createFormGroup({ label: 'Contact Email', name: 'consortiumContactEmail', type: 'email', required: true, placeholder: 'consortium@example.com' })); // type="email"
+  step0.appendChild(createFormGroup({ label: 'Contact Email', name: 'consortiumContactEmail', type: 'email', required: true, placeholder: 'consortium@example.com' }));
   steps.push(step0);
   
+  // Step 1: Mission & Values
   const step1 = createEl('div', { class: 'form-step', dataset: { step: 1 } });
   step1.appendChild(createTextareaGroup({ label: 'Mission', name: 'consortiumMission', required: false, rows: 3, helper: 'Optional – describe the mission of your consortium.' }));
   step1.appendChild(createTextareaGroup({ label: 'Values', name: 'consortiumValues', required: false, rows: 3, helper: 'Optional – describe core values of the consortium.' }));
   steps.push(step1);
   
+  // Step 2: Proof-of-Life (Contact Person)
   const step2 = createEl('div', { class: 'form-step', dataset: { step: 2 } });
   
+  // Proof of Life Input Group
   const consProofGroup = createEl('div', { class: 'form-group' });
   consProofGroup.appendChild(createEl('label', { for: 'consortiumProofOfLifeLink' }, ['Proof‑of‑Life Video Link (Contact Person) ', createEl('span', { style: 'color:#dc2626;' }, ['*'])]));
-  const consProofInput = createEl('input', { type: 'url', id: 'consortiumProofOfLifeLink', name: 'consortiumProofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' }); // type="url"
+  const consProofInput = createEl('input', { type: 'url', id: 'consortiumProofOfLifeLink', name: 'consortiumProofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' });
   consProofGroup.appendChild(consProofInput);
   
+  // Exemption Group
   const consExemptionDiv = createEl('div', { class: 'form-group' });
   const consCheckbox = createEl('input', { type: 'checkbox', id: 'hasPreviousConsortiumProof', name: 'hasPreviousConsortiumProof' });
   const consLabel = createEl('label', { for: 'hasPreviousConsortiumProof', class: 'helper-text', style: 'display:inline-block; margin-left:0.25rem;' }, ['Consortium qualifies for exemption (e.g. >50% previous candidates).']);
   consExemptionDiv.appendChild(consCheckbox);
   consExemptionDiv.appendChild(consLabel);
 
+  // Disclaimer
   const disclaimer = createEl('div', { class: 'helper-text', style: 'margin-top: 1rem; padding: 0.5rem; background-color: var(--surface-alt); border-radius: 6px; border: 1px solid var(--border); font-style: italic;' }, [
     'Disclaimer: The Contact Person vouches for each member whether they applied previously or not.'
   ]);
@@ -698,6 +689,7 @@ function renderConsortiumForm() {
   step2.appendChild(disclaimer);
   steps.push(step2);
 
+  // Toggle Visibility Logic
   function toggleConsProofVisibility() {
     if (consCheckbox.checked) {
       consProofGroup.classList.add('hidden');
@@ -709,12 +701,14 @@ function renderConsortiumForm() {
   consCheckbox.addEventListener('change', toggleConsProofVisibility);
   toggleConsProofVisibility();
 
+  // Step 3: Motivation & Experience
   const step3 = createEl('div', { class: 'form-step', dataset: { step: 3 } });
   step3.appendChild(createTextareaGroup({ label: 'Motivation for Serving', name: 'consortiumMotivation', required: true, maxLength: MOTIVATION_LIMIT, rows: 4, helper: `Explain why your consortium wants to serve (max ${MOTIVATION_LIMIT} characters).` }));
   step3.appendChild(createTextareaGroup({ label: 'Relevant Governance or Constitutional Experience', name: 'consortiumExperience', required: true, rows: 4, helper: 'Describe any past experience in governance, law or policy.' }));
   step3.appendChild(createTextareaGroup({ label: 'Communication & Transparency Approach', name: 'consortiumTransparencyApproach', required: true, rows: 4, helper: 'Describe your plan for communication and transparency.' }));
   steps.push(step3);
   
+  // Step 4: Members
   const step4 = createEl('div', { class: 'form-step', dataset: { step: 4 } });
   function renderMembers() {
     step4.innerHTML = '';
@@ -755,9 +749,7 @@ function renderConsortiumForm() {
     }
   });
   nextBtn.addEventListener('click', () => {
-    // CRITICAL FIX: Validate BEFORE advancing the step
     if (!validateConsortiumStep(current)) return;
-    
     if (current < steps.length - 1) {
       current++;
       showStep(current);
@@ -775,44 +767,32 @@ function renderConsortiumForm() {
   }
 
   function validateConsortiumStep(stepIndex) {
+    // Step 0: Identity
     if (stepIndex === 0) {
       const name = formContainer.querySelector('[name="consortiumName"]');
       const contact = formContainer.querySelector('[name="consortiumContactPerson"]');
       const email = formContainer.querySelector('[name="consortiumContactEmail"]');
-      
-      if (!name.value.trim()) {
-        showMessage('Please enter the consortium name.', 'error');
-        return false;
-      }
-      if (!contact.value.trim()) {
-        showMessage('Please enter the contact person\'s name.', 'error');
-        return false;
-      }
-      if (!isValidEmail(email.value.trim())) {
-        showMessage('Please enter a valid consortium contact email address.', 'error');
+      if (!name.value.trim() || !contact.value.trim() || !email.value.trim() || !isValidEmail(email.value.trim())) {
+        showMessage('Please fill out consortium name, contact person and a valid contact email.', 'error');
         return false;
       }
       return true;
     }
+    // Step 1: Mission (Optional)
     if (stepIndex === 1) {
-      return true; // Mission and Values are optional
+      return true;
     }
+    // Step 2: Proof of Life
     if (stepIndex === 2) {
         const proofCheckbox = formContainer.querySelector('#hasPreviousConsortiumProof');
         const proofUrl = formContainer.querySelector('#consortiumProofOfLifeLink');
-        
-        if (!proofCheckbox.checked) {
-          if (!proofUrl.value.trim()) {
-            showMessage('Please provide a contact person\'s proof‑of‑life link or select the exemption.', 'error');
-            return false;
-          }
-          if (!isValidUrl(proofUrl.value.trim())) {
-            showMessage('The contact person\'s Proof-of-Life link must be a valid URL.', 'error');
-            return false;
-          }
+        if (!proofCheckbox.checked && (!proofUrl.value.trim() || !isValidUrl(proofUrl.value.trim()))) {
+          showMessage('Please provide a valid contact person\'s proof‑of‑life link or select the exemption.', 'error');
+          return false;
         }
         return true;
     }
+    // Step 3: Motivation
     if (stepIndex === 3) {
       const mot = formContainer.querySelector('[name="consortiumMotivation"]');
       const exp = formContainer.querySelector('[name="consortiumExperience"]');
@@ -823,6 +803,7 @@ function renderConsortiumForm() {
       }
       return true;
     }
+    // Step 4: Members
     if (stepIndex === 4) {
       if (consortiumMembers.length === 0) {
         showMessage('Please add at least one consortium member.', 'error');
@@ -880,7 +861,7 @@ function renderMemberForm(container, index, renderMembersCallback = null) {
   card.appendChild(createFormGroup({ label: 'Conflict of Interest (if any)', name: `memberConflictOfInterest${index}`, type: 'text', required: false, placeholder: 'Any conflicts', value: member.conflictOfInterest, onInput: (e) => { consortiumMembers[index].conflictOfInterest = e.target.value; } }));
   card.appendChild(createFormGroup({ label: 'Stake ID (if any)', name: `memberStakeId${index}`, type: 'text', required: false, placeholder: 'Stake ID', value: member.stakeId, onInput: (e) => { consortiumMembers[index].stakeId = e.target.value; } }));
   card.appendChild(createFormGroup({ label: 'dRep ID (if any)', name: `memberDRepId${index}`, type: 'text', required: false, placeholder: 'dRep ID', value: member.dRepId, onInput: (e) => { consortiumMembers[index].dRepId = e.target.value; } }));
-  card.appendChild(createFormGroup({ label: 'Social Profile Link (if any)', name: `memberSocialProfile${index}`, type: 'url', required: false, placeholder: 'https://', value: member.socialProfile, onInput: (e) => { consortiumMembers[index].socialProfile = e.target.value; } })); // type="url"
+  card.appendChild(createFormGroup({ label: 'Social Profile Link (if any)', name: `memberSocialProfile${index}`, type: 'url', required: false, placeholder: 'https://', value: member.socialProfile, onInput: (e) => { consortiumMembers[index].socialProfile = e.target.value; } }));
   
   container.appendChild(card);
 }
@@ -908,9 +889,7 @@ function handleSubmitConsortium(e) {
   data.consortiumProofOfLifeLink = proofInput ? proofInput.value.trim() : '';
 
   
-  // 3. FORMAT VALIDATION: Member Social Profile Links
   const membersData = consortiumMembers.map((m) => {
-      // Validation already passed in validateConsortiumStep(4)
       return {
           name: m.name.trim(),
           geographicRep: m.geographicRep.trim(),
@@ -954,7 +933,7 @@ function handleSubmitConsortium(e) {
   })
     .then((res) => {
       if (!res.ok) {
-        if (res.status === 403) throw new Error('Registration Closed');
+        if (res.status === 403) throw new Error('Registration Closed/Pending');
         throw new Error('Submission failed');
       }
       return res.json();
@@ -971,19 +950,70 @@ function handleSubmitConsortium(e) {
       consortiumMembers = [];
       switchForm('Consortium');
       if (window.isEditMode) {
-        setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000); // Updated redirect
+        setTimeout(() => { window.location.href = '/ccsnap/candidates'; }, 2000);
       } else {
         loadApplications();
       }
     })
     .catch((err) => {
       console.error(err);
-      showMessage(err.message === 'Registration Closed' ? 'Submission failed: Registration is closed.' : err.message, 'error');
+      showMessage(err.message === 'Registration Closed/Pending' ? 'Submission failed: Registration is currently unavailable.' : err.message, 'error');
     });
 }
 
-// ---------- Application persistence (omitted for brevity) ----------
+// ---------- Form group helpers ----------
+function createFormGroup({ label, name, type, required = false, placeholder = '', helper = '', value = '', onInput = null }) {
+  const group = createEl('div', { class: 'form-group' });
+  const labelEl = createEl('label', { for: name }, [label, required ? createEl('span', { style: 'color:#dc2626;' }, [' *']) : '']);
+  const inputAttrs = { type: type || 'text', id: name, name: name, placeholder: placeholder };
+  if (value) inputAttrs.value = value;
+  if (required) inputAttrs.required = true;
+  const inputEl = createEl('input', inputAttrs);
+  if (onInput) {
+    inputEl.addEventListener('input', onInput);
+  }
+  group.appendChild(labelEl);
+  group.appendChild(inputEl);
+  if (helper) {
+    group.appendChild(createEl('div', { class: 'helper-text' }, [helper]));
+  }
+  return group;
+}
 
+function createTextareaGroup({ label, name, required = false, maxLength = null, rows = 3, helper = '', value = '', onInput = null }) {
+  const group = createEl('div', { class: 'form-group' });
+  const labelEl = createEl('label', { for: name }, [
+    label,
+    required ? createEl('span', { style: 'color:#dc2626;' }, [' *']) : '',
+    maxLength
+      ? createEl('span', { class: 'char-count', id: `${name}-char` }, [(value ? value.length : 0) + ' / ' + maxLength])
+      : '',
+  ]);
+  const textareaAttrs = { id: name, name: name, rows: rows };
+  if (value) textareaAttrs.value = value;
+  if (required) textareaAttrs.required = true;
+  if (maxLength) textareaAttrs.maxLength = maxLength;
+  const textareaEl = createEl('textarea', textareaAttrs);
+  textareaEl.addEventListener('input', (e) => {
+    if (maxLength) {
+      const counter = document.getElementById(`${name}-char`);
+      if (counter) {
+        counter.textContent = e.target.value.length + ' / ' + maxLength;
+      }
+    }
+    if (onInput) {
+      onInput(e);
+    }
+  });
+  group.appendChild(labelEl);
+  group.appendChild(textareaEl);
+  if (helper) {
+    group.appendChild(createEl('div', { class: 'helper-text' }, [helper]));
+  }
+  return group;
+}
+
+// ---------- Application persistence ----------
 function loadApplications() {
   fetch('/api/applications')
     .then((res) => {
@@ -1178,6 +1208,7 @@ function fallbackCopyTextToClipboard(text) {
   }
 }
 
+// Updated: Shows separate Entry ID and Token inputs + Confetti!
 function openSuccessModal(message, entryId = null, editToken = null) {
   if (typeof confetti === 'function') {
     confetti({
@@ -1201,10 +1232,18 @@ function openSuccessModal(message, entryId = null, editToken = null) {
   content.appendChild(header);
   content.appendChild(createEl('p', {}, [message]));
   
-  if (editToken) {
+  if (entryId && editToken) {
     content.appendChild(createEl('hr', { style: 'margin: 1rem 0; border: 0; border-top: 1px solid #eee;' }));
-    content.appendChild(createEl('p', { style: 'font-weight: 600; margin-bottom: 0.5rem;' }, ['Save this credential to edit later:']));
+    content.appendChild(createEl('p', { style: 'font-weight: 600; margin-bottom: 0.5rem;' }, ['Save these credentials to edit later:']));
     
+    // Entry ID
+    content.appendChild(createEl('label', { style: 'font-size: 0.8rem; display:block; margin-bottom:0.25rem;' }, ['Entry ID']));
+    const idInput = createEl('input', { type: 'text', value: entryId, readonly: true, style: 'width: 100%; margin-bottom: 0.75rem; font-size: 0.9rem; background: #f9fafb; cursor: text;' });
+    idInput.addEventListener('click', () => idInput.select());
+    content.appendChild(idInput);
+
+    // Edit Token
+    content.appendChild(createEl('label', { style: 'font-size: 0.8rem; display:block; margin-bottom:0.25rem;' }, ['Secret Token']));
     const tokenContainer = createEl('div', { style: 'display: flex; gap: 0.5rem; margin-bottom: 0.75rem;' });
     const tokenInput = createEl('input', { 
         type: 'text', 
@@ -1226,10 +1265,6 @@ function openSuccessModal(message, entryId = null, editToken = null) {
     tokenContainer.appendChild(copyBtn);
     content.appendChild(tokenContainer);
 
-    if (entryId) {
-        content.appendChild(createEl('p', { class: 'helper-text', style: 'margin-top: 0.5rem;' }, [`Entry ID: ${entryId}`]));
-    }
-    
     content.appendChild(createEl('p', { class: 'helper-text', style: 'margin-top: 0.5rem; color: #dc2626;' }, ['Warning: If you lose this token, you cannot edit your submission.']));
   }
   
@@ -1304,33 +1339,26 @@ function populateForm(type, data) {
 
     if(data.consortiumMotivation) document.querySelector('[name="consortiumMotivation"]').value = data.consortiumMotivation;
     if(data.consortiumExperience) document.querySelector('[name="consortiumExperience"]').value = data.consortiumExperience;
-    if(data.transparencyApproach) document.querySelector('[name="consortiumTransparencyApproach"]').value = data.consparencyApproach;
+    if(data.consortiumTransparencyApproach) document.querySelector('[name="consortiumTransparencyApproach"]').value = data.consortiumTransparencyApproach;
   }
 }
 
 if (applicationsList) {
   loadApplications();
 }
-
-// FIX: Initialize the form container on page load
 if (formContainer) {
-  // Check if the page is running in edit mode (from URL query params)
-  const params = new URLSearchParams(window.location.search);
-  const isEditLink = params.get('entryId') && params.get('token');
-
   // If not in edit mode, ensure a form type is selected to render the initial form.
-  if (!window.isEditMode && !isEditLink) {
-    // Default to the Individual form if no initial type is set (like on a fresh page load)
-    currentFormType = 'Individual';
-    
+  if (!window.isEditMode) {
+    currentFormType = currentFormType || 'Individual';
     // Manually set the active button state for the default form type
     const defaultBtn = document.querySelector('#btn-individual');
     if (defaultBtn) {
+        formSwitchButtons.forEach(btn => btn.classList.remove('active'));
         defaultBtn.classList.add('active');
     }
   }
   
-  // Render the form, relying on the edit mode handler (if active) or the default type.
+  // Render the form
   renderForm(currentFormType || 'Individual'); 
 }
 
@@ -1366,8 +1394,7 @@ if (btnShowEdit) {
 
 const btnLoadManual = document.getElementById('btn-load-manual-edit');
 if (btnLoadManual) {
-  // FIX: Corrected typo from btnBtnLoadManual to btnLoadManual
-  btnLoadManual.addEventListener('click', () => { 
+  btnLoadManual.addEventListener('click', () => {
     const tokenInput = document.getElementById('manual-edit-token');
     const token = tokenInput.value.trim();
 
@@ -1403,7 +1430,6 @@ if (btnLoadManual) {
         consortiumMembers = app.data.consortiumMembers || [];
       }
 
-      // Reset switch button active state before calling switchForm
       formSwitchButtons.forEach((btn) => {
         btn.classList.remove('active');
         if (btn.dataset.type === app.applicationType) {
@@ -1494,20 +1520,43 @@ function initElectionClock() {
 
   function updateClock() {
     const now = new Date().getTime();
-    const distance = REGISTRATION_DEADLINE - now;
-
-    if (distance < 0) {
-      clockEl.textContent = "REGISTRATION IS CLOSED";
-      clockEl.style.backgroundColor = "#dc2626"; 
+    
+    // --- PHASE 1: BEFORE START ---
+    if (now < REGISTRATION_START) {
+      const distance = REGISTRATION_START - now;
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+      
+      clockEl.textContent = `REGISTRATION OPENS IN: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+      clockEl.style.backgroundColor = "var(--primary-dark)"; 
+      
+      // Auto-refresh the form if the start time has just passed (within 1 second)
+      if (distance < 1000) {
+          window.location.reload(); 
+      }
       return;
     }
 
+    // --- PHASE 3: CLOSED ---
+    if (now > REGISTRATION_DEADLINE) {
+      clockEl.textContent = "REGISTRATION IS CLOSED";
+      clockEl.style.backgroundColor = "#dc2626"; // Red for closed
+      return;
+    }
+    
+    // --- PHASE 2: ACTIVE ---
+    const distance = REGISTRATION_DEADLINE - now;
+
+    // Time calculations
     const days = Math.floor(distance / (1000 * 60 * 60 * 24));
     const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-    clockEl.textContent = `Time remaining to register: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+    clockEl.textContent = `TIME REMAINING TO REGISTER: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+    clockEl.style.backgroundColor = "var(--accent)"; // Blue/Cyan for active
   }
 }
 
