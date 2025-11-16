@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CC Snap Election Portal – Candidate</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Site-wide header with branding -->
+    <div class="site-header">
+      <div class="site-header-inner">
+        <h1 class="site-title">CC Snap Election Portal</h1>
+      </div>
+    </div>
+    <div class="container">
+      <!-- Candidate specific content will be inserted here -->
+      <header>
+        <h2 id="candidate-name-heading">Candidate</h2>
+        <p class="subtitle">Detailed candidate profile.</p>
+      </header>
+      <!-- Top navigation linking to different pages -->
+      <nav class="top-nav">
+        <a href="/ccsnap">Guide</a>
+        <a href="/ccsnap/register">Register</a>
+        <a href="/ccsnap/candidates" class="active">Candidates</a>
+      </nav>
+      <!-- Candidate details container -->
+      <section id="candidate-details" class="candidate-details-section"></section>
+      <!-- Messages -->
+      <div id="messages" class="messages"></div>
+    </div>
+    <script src="app.js"></script>
+    <script>
+      // NOTE: This script relies on the presence of the helper function `buildApplicationDetails`
+      // which is defined in app.js and must be loaded first.
+      document.addEventListener('DOMContentLoaded', () => {
+        // The URL path is expected to be of the form /ccsnap/candidates/<id>
+        const parts = window.location.pathname.split('/');
+        // The last part should be the entry ID (e.g. "12345678").
+        const entryId = parts[parts.length - 1];
+        // Container for details
+        const detailsContainer = document.getElementById('candidate-details');
+        // Heading element for name
+        const nameHeading = document.getElementById('candidate-name-heading');
+        fetch('/api/applications/' + entryId)
+          .then((res) => {
+            if (!res.ok) throw new Error('Not found');
+            return res.json();
+          })
+          .then((app) => {
+            // Set heading to candidate name
+            let candidateName = '';
+            if (app.applicationType === 'Individual') {
+              candidateName = app.data.fullName || 'Individual';
+            } else if (app.applicationType === 'Organization') {
+              candidateName = app.data.orgName || 'Organisation';
+            } else if (app.applicationType === 'Consortium') {
+              candidateName = app.data.consortiumName || 'Consortium';
+            }
+            nameHeading.textContent = candidateName;
+            // Build details using existing helper from app.js
+            const details = buildApplicationDetails(app);
+            detailsContainer.appendChild(details);
+          })
+          .catch(() => {
+            nameHeading.textContent = 'Candidate not found';
+            detailsContainer.textContent = 'We could not find a candidate with ID ' + entryId + '.';
+          });
+      });
+    </script>
+  </body>
+</html>

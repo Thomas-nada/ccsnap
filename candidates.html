@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CC Snap Election Portal – Candidates</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Site-wide header with branding -->
+    <div class="site-header">
+      <div class="site-header-inner">
+        <h1 class="site-title">CC Snap Election Portal</h1>
+      </div>
+    </div>
+    <div class="container">
+      <header>
+        <h2>Candidates</h2>
+        <p class="subtitle">
+          Browse the list of submitted candidacies. Click a candidate to see
+          full details.
+        </p>
+      </header>
+      <!-- Top navigation linking to different pages -->
+      <nav class="top-nav">
+        <a href="/ccsnap">Guide</a>
+        <a href="/ccsnap/register">Register</a>
+        <a href="/ccsnap/candidates" class="active">Candidates</a>
+      </nav>
+      <!-- Messages -->
+      <div id="messages" class="messages"></div>
+      <!-- Applications list -->
+      <section id="applications-section">
+        <!-- Applications list will be populated by app.js as cards -->
+        <div id="applications-list" class="applications-list"></div>
+      </section>
+      <!-- Modal overlay for application details -->
+      <div id="application-modal" class="modal-overlay hidden">
+        <div class="modal-content"></div>
+      </div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
