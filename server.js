@@ -1,34 +1,27 @@
 /*
-  Express Server for the CC Application Demo
-  -----------------------------------------
+  Simple Node HTTP server for the CC Application Demo
 */
 
-const express = require('express');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const bodyParser = require('body-parser');
 
-const app = express();
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const submissionsDir = path.join(ROOT, 'submissions');
 
 // --- CONFIGURATION ---
-// Deadline: November 25, 2025, 12:00 UTC
+// Registration Start Time: Sunday, November 16, 2025, 21:53:00 UTC (Set to 5 minutes from 21:48 UTC)
+const REGISTRATION_START = new Date('2025-11-16T21:53:00Z').getTime();
+// Registration Deadline: November 25, 2025, 12:00 UTC
 const REGISTRATION_DEADLINE = new Date('2025-11-25T12:00:00Z').getTime();
 
-// Helper to synchronously assign entry IDs and create tokens if missing
+// Helper to synchronously assign entry IDs
 function ensureEntryIdsSync() {
   try {
-    if (!fs.existsSync(submissionsDir)) {
-      fs.mkdirSync(submissionsDir, { recursive: true });
-    }
-    
     const files = fs.readdirSync(submissionsDir);
     const presentIds = new Set();
-    
-    // First pass: Collect existing IDs
     files.forEach((fname) => {
       if (!fname.endsWith('.json')) return;
       const fpath = path.join(submissionsDir, fname);
@@ -38,262 +31,300 @@ function ensureEntryIdsSync() {
         if (sub.entryId) presentIds.add(sub.entryId);
       } catch (_) {}
     });
-
-    // Second pass: Assign missing IDs or tokens
     files.forEach((fname) => {
       if (!fname.endsWith('.json')) return;
       const fpath = path.join(submissionsDir, fname);
       try {
         const raw = fs.readFileSync(fpath, 'utf8');
-        let sub = JSON.parse(raw);
-        let changed = false;
-
-        // Ensure entryId exists
+        const sub = JSON.parse(raw);
         if (!sub.entryId) {
           let newId;
           do {
             newId = Math.floor(10000000 + Math.random() * 90000000).toString();
           } while (presentIds.has(newId));
-          sub.entryId = newId;
           presentIds.add(newId);
-          changed = true;
+          sub.entryId = newId;
+          fs.writeFileSync(fpath, JSON.stringify(sub, null, 2));
         }
-
-        // Ensure editToken exists
-        if (!sub.editToken) {
-          sub.editToken = crypto.randomBytes(16).toString('hex');
-          changed = true;
-        }
-
-        if (changed) {
-          fs.writeFileSync(fpath, JSON.stringify(sub, null, 2), 'utf8');
-        }
-      } catch (e) {
-        console.error(`Error processing file ${fname}:`, e.message);
-      }
+      } catch (_) {}
     });
-    console.log('Submission files verified and updated with entry IDs/tokens.');
   } catch (err) {
-    console.error('Error during file initialization:', err);
+    console.error('Failed to synchronise entry IDs:', err);
   }
 }
 
-// Initial ID assignment on server start
+fs.mkdirSync(submissionsDir, { recursive: true });
 ensureEntryIdsSync();
 
-// --- MIDDLEWARE ---
-app.use(express.json());
-app.use(bodyParser.json());
+function sendJson(res, statusCode, data) {
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  });
+  res.end(JSON.stringify(data));
+}
 
-// --- API ENDPOINTS (No changes needed) ---
-
-// 1. Submit/Update Application
-app.post('/api/submit', (req, res) => {
-  const application = req.body;
+function handleEditSubmission(res, submission) {
   const now = Date.now();
-
-  if (now > REGISTRATION_DEADLINE && !application.editToken) {
-    return res.status(403).json({ error: 'Registration is closed for new submissions.' });
+  // Enforce Start time and Deadline for Edits as well
+  if (now < REGISTRATION_START) {
+    return sendJson(res, 403, { error: 'Editing is not allowed before registration starts.' });
+  }
+  if (now > REGISTRATION_DEADLINE) {
+    return sendJson(res, 403, { error: 'Registration is closed. No further edits allowed.' });
   }
 
-  try {
-    if (application.editToken && application.entryId) {
-      const { entryId, editToken } = application;
-      const filePath = path.join(submissionsDir, `${entryId}.json`);
+  const { entryId, editToken } = submission;
 
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: 'Entry not found for update.' });
-      }
+  fs.readdir(submissionsDir, (err, files) => {
+    if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
 
-      const existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-      if (existingData.editToken !== editToken) {
-        return res.status(401).json({ error: 'Invalid token for entry update.' });
-      }
-
-      const updatedApplication = {
-        ...application,
-        entryId: existingData.entryId,
-        editToken: existingData.editToken,
-        submittedAt: existingData.submittedAt, 
-        updatedAt: now
-      };
-      
-      fs.writeFileSync(filePath, JSON.stringify(updatedApplication, null, 2), 'utf8');
-      console.log(`Updated entry: ${entryId}`);
-      return res.status(200).json({ entryId, editToken: existingData.editToken });
-
-    } else {
-      if (now > REGISTRATION_DEADLINE) {
-        return res.status(403).json({ error: 'Registration is closed for new submissions.' });
-      }
-
-      let newId;
-      const files = fs.readdirSync(submissionsDir);
-      const presentIds = new Set();
-      files.forEach(fname => {
-        if (fname.endsWith('.json')) {
-            try {
-                const sub = JSON.parse(fs.readFileSync(path.join(submissionsDir, fname), 'utf8'));
-                if (sub.entryId) presentIds.add(sub.entryId);
-            } catch (_) {}
-        }
-      });
-      
-      do {
-        newId = Math.floor(10000000 + Math.random() * 90000000).toString();
-      } while (presentIds.has(newId));
-
-      const newEditToken = crypto.randomBytes(16).toString('hex');
-      const newApplication = {
-        ...application,
-        entryId: newId,
-        editToken: newEditToken,
-        submittedAt: now
-      };
-      
-      const filePath = path.join(submissionsDir, `${newId}.json`);
-      fs.writeFileSync(filePath, JSON.stringify(newApplication, null, 2), 'utf8');
-      console.log(`New entry created: ${newId}`);
-      return res.status(201).json({ entryId: newId, editToken: newEditToken });
-    }
-
-  } catch (error) {
-    console.error('API submission error:', error);
-    return res.status(500).json({ error: 'Failed to process submission.' });
-  }
-});
-
-// 2. Lookup Application by Token (for Editing)
-app.post('/api/lookup', (req, res) => {
-    const { token } = req.body;
-    if (!token) {
-        return res.status(400).json({ error: 'Token is required.' });
-    }
-
-    try {
-        const files = fs.readdirSync(submissionsDir);
-        for (const fname of files) {
-            if (fname.endsWith('.json')) {
-                const fpath = path.join(submissionsDir, fname);
-                const sub = JSON.parse(fs.readFileSync(fpath, 'utf8'));
-
-                if (sub.editToken === token) {
-                    const appData = { ...sub };
-                    delete appData.editToken; 
-                    return res.json(appData);
-                }
-            }
-        }
-        return res.status(404).json({ error: 'Application not found or token is invalid.' });
-    } catch (error) {
-        console.error('API lookup error:', error);
-        return res.status(500).json({ error: 'Failed to lookup application.' });
-    }
-});
-
-
-// 3. Get All Applications (for Candidates list)
-app.get('/api/applications', (req, res) => {
-  try {
-    const apps = [];
-    const files = fs.readdirSync(submissionsDir);
-
-    files.forEach((fname) => {
-      if (!fname.endsWith('.json')) return;
-      const fpath = path.join(submissionsDir, fname);
+    let fileFound = false;
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      const filePath = path.join(submissionsDir, file);
       try {
-        const sub = JSON.parse(fs.readFileSync(fpath, 'utf8'));
-        const safeSub = { 
-            entryId: sub.entryId,
-            applicationType: sub.applicationType,
-            submittedAt: sub.submittedAt,
-            data: sub.data
-        };
-        if (safeSub.data) {
-            delete safeSub.data.email;
-            delete safeSub.data.contactEmail;
-            delete safeSub.data.proofOfLifeLink;
-            delete safeSub.data.orgProofOfLifeLink;
-            delete safeSub.data.consortiumProofOfLifeLink;
+        const content = fs.readFileSync(filePath, 'utf8');
+        const storedSub = JSON.parse(content);
+
+        if (storedSub.entryId === entryId) {
+          fileFound = true;
+          if (storedSub.editToken === editToken) {
+            submission.editToken = storedSub.editToken;
+            submission.entryId = storedSub.entryId;
+            submission.submittedAt = storedSub.submittedAt; 
+            submission.userId = storedSub.userId; 
+
+            fs.writeFileSync(filePath, JSON.stringify(submission, null, 2));
+            return sendJson(res, 200, { status: 'ok', message: 'Submission updated' });
+          } else {
+            return sendJson(res, 403, { error: 'Invalid edit token' });
+          }
         }
-        apps.push(safeSub);
-      } catch (e) {
-        console.error(`Error reading application file ${fname}:`, e.message);
+      } catch (err) {}
+    }
+    if (!fileFound) return sendJson(res, 404, { error: 'Submission not found' });
+  });
+}
+
+const server = http.createServer((req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    return res.end();
+  }
+
+  // API: Submit
+  if (req.url === '/api/submit' && req.method === 'POST') {
+    const now = Date.now();
+    // 1. Check Start time and Deadline FIRST
+    if (now < REGISTRATION_START) {
+        return sendJson(res, 403, { error: 'Registration has not started yet.' });
+    }
+    if (now > REGISTRATION_DEADLINE) {
+      return sendJson(res, 403, { error: 'Registration is closed for new submissions.' });
+    }
+
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const submission = JSON.parse(body);
+        if (!submission || !submission.applicationType || !submission.submittedAt || !submission.data) {
+          return sendJson(res, 400, { error: 'Invalid submission format' });
+        }
+
+        if (submission.entryId && submission.editToken) {
+          handleEditSubmission(res, submission);
+        } else {
+          // New Submission logic
+          if (!submission.entryId) {
+            submission.entryId = Math.floor(10000000 + Math.random() * 90000000).toString();
+          }
+          const editToken = crypto.randomBytes(16).toString('hex');
+          submission.editToken = editToken;
+          const timestamp = Date.now();
+          const filename = path.join(submissionsDir, `${timestamp}.json`);
+          
+          fs.writeFile(filename, JSON.stringify(submission, null, 2), (err) => {
+            if (err) {
+              console.error('Failed to write submission:', err);
+              return sendJson(res, 500, { error: 'Failed to store submission' });
+            }
+            sendJson(res, 200, { status: 'ok', entryId: submission.entryId, editToken: editToken });
+          });
+        }
+      } catch (err) {
+        sendJson(res, 400, { error: 'Invalid JSON payload' });
       }
     });
-
-    res.json(apps);
-  } catch (error) {
-    console.error('API get applications error:', error);
-    res.status(500).json({ error: 'Failed to retrieve applications.' });
-  }
-});
-
-// 4. Get Single Application by ID (for Candidate Detail page)
-app.get('/api/applications/:id', (req, res) => {
-  const entryId = req.params.id;
-  const filePath = path.join(submissionsDir, `${entryId}.json`);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'Candidate not found.' });
+    return;
   }
 
-  try {
-    const sub = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    
-    const safeSub = { 
-        entryId: sub.entryId,
-        applicationType: sub.applicationType,
-        submittedAt: sub.submittedAt,
-        data: sub.data
-    };
-    if (safeSub.data) {
-        delete safeSub.data.email;
-        delete safeSub.data.contactEmail;
-        delete safeSub.data.proofOfLifeLink;
-        delete safeSub.data.orgProofOfLifeLink;
-        delete safeSub.data.consortiumProofOfLifeLink;
+  // API: LOOKUP BY TOKEN
+  if (req.url === '/api/lookup' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { token } = JSON.parse(body);
+        if (!token) return sendJson(res, 400, { error: 'Token required' });
+
+        // Check if lookup/editing is allowed
+        if (Date.now() < REGISTRATION_START) {
+            return sendJson(res, 403, { error: 'Editing is not allowed before registration starts.' });
+        }
+
+        fs.readdir(submissionsDir, (err, files) => {
+          if (err) return sendJson(res, 500, { error: 'Storage error' });
+
+          for (const file of files) {
+            if (!file.endsWith('.json')) continue;
+            try {
+              const content = fs.readFileSync(path.join(submissionsDir, file), 'utf8');
+              const sub = JSON.parse(content);
+              if (sub.editToken === token) {
+                return sendJson(res, 200, sub);
+              }
+            } catch (e) {}
+          }
+          sendJson(res, 404, { error: 'Invalid token or submission not found' });
+        });
+      } catch (e) {
+        sendJson(res, 400, { error: 'Invalid request' });
+      }
+    });
+    return;
+  }
+
+  // API: List
+  if (req.url === '/api/applications' && req.method === 'GET') {
+    fs.readdir(submissionsDir, (err, files) => {
+      if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
+      const applications = [];
+      files
+        .filter((file) => file.endsWith('.json'))
+        .forEach((file) => {
+          try {
+            const content = fs.readFileSync(path.join(submissionsDir, file), 'utf8');
+            const submission = JSON.parse(content);
+            const { editToken, ...safeSubmission } = submission;
+            // Clean up potentially sensitive fields for public list display
+            if (safeSubmission.data) {
+                delete safeSubmission.data.email;
+                delete safeSubmission.data.contactEmail;
+                delete safeSubmission.data.proofOfLifeLink;
+                delete safeSubmission.data.orgProofOfLifeLink;
+                delete safeSubmission.data.consortiumProofOfLifeLink;
+            }
+            applications.push(safeSubmission);
+          } catch (err) {}
+        });
+      applications.sort((a, b) => b.submittedAt - a.submittedAt);
+      sendJson(res, 200, applications);
+    });
+    return;
+  }
+
+  // API: Get One
+  if (req.url.startsWith('/api/applications/') && req.method === 'GET') {
+    const urlParts = req.url.split('?')[0].split('/');
+    const entryId = urlParts[urlParts.length - 1];
+
+    fs.readdir(submissionsDir, (err, files) => {
+      if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        try {
+          const content = fs.readFileSync(path.join(submissionsDir, file), 'utf8');
+          const submission = JSON.parse(content);
+          if (submission.entryId === entryId || submission.id === entryId) {
+             const { editToken, ...safeSubmission } = submission;
+             // Clean up potentially sensitive fields for detail display
+             if (safeSubmission.data) {
+                delete safeSubmission.data.email;
+                delete safeSubmission.data.contactEmail;
+                delete safeSubmission.data.proofOfLifeLink;
+                delete safeSubmission.data.orgProofOfLifeLink;
+                delete safeSubmission.data.consortiumProofOfLifeLink;
+            }
+             return sendJson(res, 200, safeSubmission);
+          }
+        } catch (err) {}
+      }
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not Found' }));
+    });
+    return;
+  }
+
+  // --- STATIC FILE SERVING & ROUTING ---
+  let reqPath = decodeURIComponent(req.url).split('?')[0];
+  let filePath;
+
+  if (reqPath.endsWith('/')) reqPath = reqPath.slice(0, -1);
+  
+  let subPath = null;
+  
+  // 1. Handle /ccsnap prefix for HTML pages (Routes)
+  if (reqPath === '/ccsnap') {
+    filePath = path.join(ROOT, 'index.html');
+  } else if (reqPath.startsWith('/ccsnap')) {
+    subPath = reqPath.slice('/ccsnap'.length);
+    if (subPath === '/register') {
+      filePath = path.join(ROOT, 'register.html');
+    } else if (subPath === '/candidates') {
+      filePath = path.join(ROOT, 'candidates.html');
+    } else if (subPath.startsWith('/candidates/')) {
+      filePath = path.join(ROOT, 'candidate.html');
+    } else if (subPath.startsWith('/')) {
+        // This handles assets requested *with* the prefix, e.g., /ccsnap/styles.css
+        filePath = path.join(ROOT, subPath.slice(1));
+    } else {
+      filePath = path.join(ROOT, subPath);
     }
-
-    res.json(safeSub);
-  } catch (error) {
-    console.error(`API get application ${entryId} error:`, error);
-    res.status(500).json({ error: 'Failed to retrieve application detail.' });
+  } 
+  
+  // 2. Handle root assets requested without prefix (e.g., /styles.css, /app.js)
+  // This is the fallback for assets linked using the root-relative path (e.g. <link href="/styles.css">)
+  if (!filePath) {
+      const ext = path.extname(reqPath);
+      // Check for common asset extensions or assume it's a file if it looks like one
+      if (ext === '.css' || ext === '.js' || ext === '.html' || ext === '.png' || reqPath === '/app.js' || reqPath === '/styles.css') {
+         filePath = path.join(ROOT, reqPath.startsWith('/') ? reqPath.slice(1) : reqPath);
+      } else if (reqPath === '' || reqPath === '/') {
+        // Serve index.html if request is simply root /
+        filePath = path.join(ROOT, 'index.html');
+      }
   }
+
+  if (!filePath) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      return res.end('Not Found');
+  }
+
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+        console.error(`Error reading file ${filePath}:`, err.code);
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        return res.end('Not Found');
+    }
+    const ext = path.extname(filePath);
+    let contentType = 'text/html';
+    if (ext === '.js') contentType = 'application/javascript';
+    if (ext === '.css') contentType = 'text/css';
+    if (ext === '.png') contentType = 'image/png';
+    res.writeHead(200, { 'Content-Type': contentType, 'Access-Control-Allow-Origin': '*' });
+    res.end(data);
+  });
 });
 
-
-// --- STATIC FILE SERVING & ROUTING ---
-
-// 1. Serve static files (styles.css, app.js, images, etc.) from the root directory.
-// This handles requests like /styles.css, /app.js
-app.use(express.static(ROOT));
-
-// 2. Explicit Fix: Ensure static files are also served correctly when prefixed with /ccsnap.
-app.use('/ccsnap', express.static(ROOT));
-
-
-// 3. Custom routing logic for the /ccsnap prefix (sends HTML file):
-app.get('/ccsnap', (req, res) => {
-  res.sendFile(path.join(ROOT, 'index.html'));
-});
-
-app.get('/ccsnap/register', (req, res) => {
-  res.sendFile(path.join(ROOT, 'register.html'));
-});
-
-app.get('/ccsnap/candidates', (req, res) => {
-  res.sendFile(path.join(ROOT, 'candidates.html'));
-});
-
-// For any candidate detail page (e.g., /ccsnap/candidates/12345678), serve candidate.html
-app.get('/ccsnap/candidates/:id', (req, res) => {
-  res.sendFile(path.join(ROOT, 'candidate.html'));
-});
-
-
-// --- START SERVER ---
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
 });
