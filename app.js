@@ -10,7 +10,7 @@ const STORAGE_KEY = 'ccApplications';
 const USER_ID_KEY = 'ccUserId';
 
 // DEADLINE: November 25, 2025, 12:00 UTC
-const REGISTRATION_DEADLINE = new Date('2025-11-25T12:00:00Z').getTime();
+const REGISTRATION_DEADLINE = new Date('2025-11-24T12:00:00Z').getTime();
 
 function getUserId() {
   let uid = localStorage.getItem(USER_ID_KEY);
@@ -93,7 +93,7 @@ function renderForm(type) {
     formContainer.innerHTML = `
       <div class="guide" style="text-align:center; padding: 3rem;">
         <h3 style="color: #dc2626; border:none;">Registration Closed</h3>
-        <p>The deadline for candidate submissions has passed (Nov 25, 2025).</p>
+        <p>The deadline for candidate submissions has passed (Nov 24, 2025).</p>
         <p>New applications and edits are no longer accepted.</p>
       </div>
     `;

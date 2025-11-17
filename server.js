@@ -15,7 +15,7 @@ const submissionsDir = path.join(ROOT, 'submissions');
 // Registration Start Time: Sunday, November 16, 2025, 21:53:00 UTC (Set to 5 minutes from 21:48 UTC)
 const REGISTRATION_START = new Date('2025-11-16T21:53:00Z').getTime();
 // Registration Deadline: November 25, 2025, 12:00 UTC
-const REGISTRATION_DEADLINE = new Date('2025-11-25T12:00:00Z').getTime();
+const REGISTRATION_DEADLINE = new Date('2025-11-24T12:00:00Z').getTime();
 
 // Helper to synchronously assign entry IDs
 function ensureEntryIdsSync() {
