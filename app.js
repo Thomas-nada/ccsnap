@@ -141,14 +141,14 @@ function renderIndividualForm() {
   step1.appendChild(createFormGroup({ label: 'Conflict of Interest (if any)', name: 'conflictOfInterest', type: 'text', required: false, placeholder: 'Describe any conflicts of interest' }));
   step1.appendChild(createFormGroup({ label: 'Stake ID (if any)', name: 'stakeId', type: 'text', required: false, placeholder: 'Optional stake key or account' }));
   step1.appendChild(createFormGroup({ label: 'dRep ID (if any)', name: 'dRepId', type: 'text', required: false, placeholder: 'Optional dRep identifier' }));
-  step1.appendChild(createFormGroup({ label: 'Social Profile Link (if any)', name: 'socialProfile', type: 'url', required: false, placeholder: 'https://twitter.com/yourhandle' }));
+  step1.appendChild(createFormGroup({ label: 'Social Profile Link (if any)', name: 'socialProfile', type: 'url', required: false, placeholder: 'https://x.com/yourhandle' }));
   steps.push(step1);
 
   const step2 = createEl('div', { class: 'form-step', dataset: { step: 2 } });
   const proofGroup = createEl('div', { class: 'form-group' });
   const proofLabel = createEl('label', { for: 'proofOfLifeLink' }, ['Proof‑of‑Life Video Link ', createEl('span', { style: 'color:#dc2626;' }, ['*'])]);
   proofGroup.appendChild(proofLabel);
-  const proofInput = createEl('input', { type: 'url', id: 'proofOfLifeLink', name: 'proofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' });
+  const proofInput = createEl('input', { type: 'url', id: 'proofOfLifeLink', name: 'proofOfLifeLink', placeholder: 'Public video URL (e.g. https://yourhost.com/video' });
   proofGroup.appendChild(proofInput);
   const exemptionDiv = createEl('div', { class: 'form-group' });
   const exemptionCheckbox = createEl('input', { type: 'checkbox', id: 'hasPreviousIndividualProof', name: 'hasPreviousIndividualProof' });
@@ -354,7 +354,7 @@ function renderOrganizationForm() {
   const step2 = createEl('div', { class: 'form-step', dataset: { step: 2 } });
   const orgProofGroup = createEl('div', { class: 'form-group' });
   orgProofGroup.appendChild(createEl('label', { for: 'orgProofOfLifeLink' }, ['Proof‑of‑Life Video Link ', createEl('span', { style: 'color:#dc2626;' }, ['*'])]));
-  const orgProofInput = createEl('input', { type: 'url', id: 'orgProofOfLifeLink', name: 'orgProofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' });
+  const orgProofInput = createEl('input', { type: 'url', id: 'orgProofOfLifeLink', name: 'orgProofOfLifeLink', placeholder: 'Public video URL (e.g. https://yourhost.com/video' });
   orgProofGroup.appendChild(orgProofInput);
   const orgExemptionDiv = createEl('div', { class: 'form-group' });
   const orgCheckbox = createEl('input', { type: 'checkbox', id: 'hasPreviousOrgProof', name: 'hasPreviousOrgProof' });
@@ -561,7 +561,7 @@ function renderConsortiumForm() {
   // Proof of Life Input Group
   const consProofGroup = createEl('div', { class: 'form-group' });
   consProofGroup.appendChild(createEl('label', { for: 'consortiumProofOfLifeLink' }, ['Proof‑of‑Life Video Link (Contact Person) ', createEl('span', { style: 'color:#dc2626;' }, ['*'])]));
-  const consProofInput = createEl('input', { type: 'url', id: 'consortiumProofOfLifeLink', name: 'consortiumProofOfLifeLink', placeholder: 'https://youtube.com/link-to-video' });
+  const consProofInput = createEl('input', { type: 'url', id: 'consortiumProofOfLifeLink', name: 'consortiumProofOfLifeLink', placeholder: 'Public video URL (e.g. https://yourhost.com/video' });
   consProofGroup.appendChild(consProofInput);
   
   // Exemption Group
