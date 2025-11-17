@@ -7,7 +7,7 @@ RUN npm ci --omit=dev
 
 COPY . .
 
-RUN mkdir -p submissions
+RUN mkdir -p submissions && chown -R node:node submissions
 
 ENV NODE_ENV=production
 
