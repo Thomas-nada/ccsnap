@@ -6,6 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { URL } = require('url'); // Import URL for validation
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
@@ -16,6 +17,27 @@ const submissionsDir = path.join(ROOT, 'submissions');
 const REGISTRATION_START = new Date('2025-11-16T21:53:00Z').getTime();
 // Registration Deadline: November 25, 2025, 12:00 UTC
 const REGISTRATION_DEADLINE = new Date('2025-11-24T12:00:00Z').getTime();
+
+// --- VALIDATION HELPERS ---
+function isValidEmail(email) {
+  if (!email || email.trim() === '') return true; // Allow empty
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(String(email).toLowerCase());
+}
+
+function isValidUrl(url) {
+  if (!url || url.trim() === '') return true; // Allow empty
+  // Must start with http:// or https://
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      new URL(url); // Check if it's a valid URL structure
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  return false;
+}
 
 // Helper to synchronously assign entry IDs
 function ensureEntryIdsSync() {
@@ -139,6 +161,38 @@ const server = http.createServer((req, res) => {
           return sendJson(res, 400, { error: 'Invalid submission format' });
         }
 
+        // --- START SERVER-SIDE VALIDATION ---
+        const data = submission.data;
+        let validationError = null;
+
+        if (submission.applicationType === 'Individual') {
+            if (!isValidEmail(data.email)) validationError = 'Invalid contact email format.';
+            if (!isValidUrl(data.socialProfile)) validationError = 'Invalid social profile URL. Must start with http:// or https://';
+            if (!data.proofOfLifeExempt && data.proofOfLifeLink && !isValidUrl(data.proofOfLifeLink)) validationError = 'Invalid Proof-of-Life URL. Must start with http:// or https://';
+        } 
+        else if (submission.applicationType === 'Organization') {
+            if (!isValidEmail(data.contactEmail)) validationError = 'Invalid contact email format.';
+            if (!data.orgProofOfLifeExempt && data.orgProofOfLifeLink && !isValidUrl(data.orgProofOfLifeLink)) validationError = 'Invalid Proof-of-Life URL. Must start with http:// or https://';
+        }
+        else if (submission.applicationType === 'Consortium') {
+            if (!isValidEmail(data.consortiumContactEmail)) validationError = 'Invalid contact email format.';
+            if (!data.consortiumProofOfLifeExempt && data.consortiumProofOfLifeLink && !isValidUrl(data.consortiumProofOfLifeLink)) validationError = 'Invalid Proof-of-Life URL. Must start with http:// or https://';
+            
+            if (data.consortiumMembers && Array.isArray(data.consortiumMembers)) {
+                for (const member of data.consortiumMembers) {
+                    if (!isValidUrl(member.socialProfile)) {
+                        validationError = `Invalid social profile URL for member ${member.name || ''}. Must start with http:// or https://`;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (validationError) {
+            return sendJson(res, 400, { error: validationError });
+        }
+        // --- END SERVER-SIDE VALIDATION ---
+
         if (submission.entryId && submission.editToken) {
           handleEditSubmission(res, submission);
         } else {
@@ -165,6 +219,69 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+
+  // API: DELETE SUBMISSION
+  if (req.url === '/api/delete' && req.method === 'POST') {
+    const now = Date.now();
+    // 1. Check Start time and Deadline
+    if (now < REGISTRATION_START) {
+        return sendJson(res, 403, { error: 'Deletion is not allowed before registration starts.' });
+    }
+    if (now > REGISTRATION_DEADLINE) {
+      return sendJson(res, 403, { error: 'Registration is closed. Deletion is not allowed.' });
+    }
+
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { entryId, editToken } = JSON.parse(body);
+        if (!entryId || !editToken) {
+          return sendJson(res, 400, { error: 'Entry ID and Token are required.' });
+        }
+
+        fs.readdir(submissionsDir, (err, files) => {
+          if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
+
+          let fileFound = false;
+          for (const file of files) {
+            if (!file.endsWith('.json')) continue;
+            const filePath = path.join(submissionsDir, file);
+            try {
+              const content = fs.readFileSync(filePath, 'utf8');
+              const storedSub = JSON.parse(content);
+
+              if (storedSub.entryId === entryId) {
+                fileFound = true;
+                if (storedSub.editToken === editToken) {
+                  // Valid token, proceed with deletion
+                  fs.unlink(filePath, (unlinkErr) => {
+                    if (unlinkErr) {
+                      console.error('Failed to delete file:', unlinkErr);
+      
+                      return sendJson(res, 500, { error: 'Failed to delete submission file.' });
+                    }
+                    return sendJson(res, 200, { status: 'ok', message: 'Submission deleted' });
+                  });
+                  return; // Exit loop after starting delete
+                } else {
+                  return sendJson(res, 403, { error: 'Invalid edit token' });
+                }
+              }
+            } catch (readErr) {
+              console.error('Error reading submission file:', readErr);
+            }
+          }
+          if (!fileFound) return sendJson(res, 404, { error: 'Submission not found' });
+        });
+
+      } catch (err) {
+        sendJson(res, 400, { error: 'Invalid JSON payload' });
+      }
+    });
+    return;
+  }
+
 
   // API: LOOKUP BY TOKEN
   if (req.url === '/api/lookup' && req.method === 'POST') {
@@ -245,14 +362,8 @@ const server = http.createServer((req, res) => {
           const submission = JSON.parse(content);
           if (submission.entryId === entryId || submission.id === entryId) {
              const { editToken, ...safeSubmission } = submission;
-             // Clean up potentially sensitive fields for detail display
-             if (safeSubmission.data) {
-                delete safeSubmission.data.email;
-                delete safeSubmission.data.contactEmail;
-                delete safeSubmission.data.proofOfLifeLink;
-                delete safeSubmission.data.orgProofOfLifeLink;
-                delete safeSubmission.data.consortiumProofOfLifeLink;
-            }
+             // On the *detail* page, we DO show the PoL link AND email.
+             // No fields are deleted here.
              return sendJson(res, 200, safeSubmission);
           }
         } catch (err) {}
