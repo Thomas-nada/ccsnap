@@ -265,6 +265,59 @@ form .helper-text {
   margin-top: 0.35rem;
 }
 
+/* --- NEW: Filter and Search Controls --- */
+.filter-controls {
+  display: flex;
+  flex-wrap: wrap; /* Allow wrapping on small screens */
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background-color: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.search-bar {
+  flex-grow: 1;
+  min-width: 250px;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+.search-bar input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 51, 173, 0.1);
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap; /* Allow buttons to wrap */
+}
+
+.filter-buttons .btn {
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+}
+
+.filter-buttons .btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+/* --- End Filter/Search Styles --- */
+
+
 /* Candidate cards on candidates page */
 .applications-list {
   display: grid;
@@ -484,6 +537,98 @@ form .helper-text {
   border-color: #c7d2fe;
 }
 
+/* --- New Styles for Candidate Detail Page --- */
+.candidate-details-section {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem 2.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.candidate-details-section .detail {
+  margin-bottom: 1.25rem;
+  font-size: 0.95rem;
+  color: var(--text-dark);
+  line-height: 1.6;
+  overflow-wrap: break-word; /* --- THIS IS THE FIX --- */
+}
+.candidate-details-section .detail span {
+  font-weight: 600;
+  color: var(--primary-dark);
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.25rem;
+}
+
+/* Style for links within details */
+.candidate-details-section .detail a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+.candidate-details-section .detail a:hover {
+    text-decoration: underline;
+}
+
+/* Style for pre-formatted (textarea) content */
+.candidate-details-section .detail pre {
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: 0.95rem;
+    margin: 0;
+    color: var(--text-dark);
+    line-height: 1.6;
+}
+
+/* Grid for short details */
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+}
+
+/* Section headers for long-form content */
+.detail-section-header {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--primary);
+    border-bottom: 2px solid var(--surface-alt);
+    padding-bottom: 0.5rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+/* Member cards on detail page */
+.candidate-details-section .member-card {
+    background-color: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+.candidate-details-section .member-card h5 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--primary-dark);
+    font-size: 1.1rem;
+}
+.candidate-details-section .member-card .detail {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+.candidate-details-section .member-card .detail span {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+/* --- End New Styles --- */
+
+
 /* Timeline styles for the guide */
 .timeline {
     list-style: none;
@@ -506,4 +651,15 @@ form .helper-text {
     background: var(--background);
     border: 2px solid var(--primary);
     border-radius: 50%;
+}
+
+/* Edit Mode Banner */
+.edit-banner {
+    background-color: #fffbeb;
+    color: #b45309;
+    padding: 1rem 1.5rem;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    text-align: center;
 }
