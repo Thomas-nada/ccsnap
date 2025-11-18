@@ -29,6 +29,21 @@
       </nav>
       <!-- Messages -->
       <div id="messages" class="messages"></div>
+
+      <!-- --- NEW: Filter and Search Controls --- -->
+      <div class="filter-controls">
+        <div class="search-bar">
+          <input type="text" id="search-input" placeholder="Search by name..." />
+        </div>
+        <div class="filter-buttons">
+          <button class="btn secondary active" data-filter="All">All</button>
+          <button class="btn secondary" data-filter="Individual">Individuals</button>
+          <button class="btn secondary" data-filter="Organization">Organisations</button>
+          <button class="btn secondary" data-filter="Consortium">Consortiums</button>
+        </div>
+      </div>
+      <!-- --- End New Controls --- -->
+
       <!-- Applications list -->
       <section id="applications-section">
         <!-- Applications list will be populated by app.js as cards -->
@@ -39,6 +54,6 @@
         <div class="modal-content"></div>
       </div>
     </div>
-    <script src="app.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>
