@@ -1,523 +1,476 @@
 /*
   Simple Node HTTP server for the CC Application Demo
-  SECURED against malformed requests and scanners
-  Wrapped with Global Error Handling for Stability
+  FORT KNOX EDITION: Maximum Security + Honeypots + Attitude
 */
 
 const http = require('http');
+const https = require('https'); 
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { URL } = require('url'); // Import URL for validation
+const { URL } = require('url'); 
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const submissionsDir = path.join(ROOT, 'submissions');
 
 // --- CONFIGURATION ---
-// Registration Start Time: Sunday, November 16, 2025, 21:53:00 UTC (Set to 5 minutes from 21:48 UTC)
 const REGISTRATION_START = new Date('2025-11-16T21:53:00Z').getTime();
-// Registration Deadline: November 25, 2025, 12:00 UTC
 const REGISTRATION_DEADLINE = new Date('2025-11-24T12:00:00Z').getTime();
 
-// --- 1. GLOBAL SAFETY NET (Prevents crashing on unexpected errors) ---
-// This acts as a "Try/Catch" for the whole server process. 
-// If an error slips through, this catches it, logs it, and prevents the server from dying.
-process.on('uncaughtException', (err) => {
-  console.error('------------------------------------------------');
-  console.error('PREVENTED CRASH (Uncaught Exception):');
-  console.error(err);
-  console.error('------------------------------------------------');
-});
+// --- FUN CONFIG ---
+const BLOCK_MESSAGE = "Nice try. 🛡️"; 
+const SERVER_NAME = "The Iron Dome";
+const RICK_ROLL_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
+// --- TRAP CONFIG (The Honeypot) ---
+const HONEYPOTS = [
+    '/admin', '/wp-login.php', '/.env', '/config', '/backup.sql', 
+    '/phpmyadmin', '/console', '/root', '/api/debug'
+];
+
+// --- SECURITY CONFIG ---
+const RATE_LIMIT_WINDOW = 60 * 1000; 
+const RATE_LIMIT_MAX = 100; 
+const ipRequestCounts = new Map();
+
+// --- WEBHOOK CONFIGURATION ---
+const ALERT_WEBHOOK_URL = ""; 
+
+// --- SECURITY HELPER: INCIDENT REPORTER ---
+function sendSecurityAlert(type, ip, details) {
+    if (!ALERT_WEBHOOK_URL) return;
+    
+    const payload = JSON.stringify({
+        content: `🚨 **Security Alert: ${type}**`,
+        embeds: [{
+            title: "Attack Blocked",
+            color: 15158332, 
+            fields: [
+                { name: "Attacker IP", value: ip || "Unknown", inline: true },
+                { name: "Time", value: new Date().toISOString(), inline: true },
+                { name: "Details", value: `\`\`\`${details.substring(0, 1000)}\`\`\`` }
+            ]
+        }]
+    });
+    
+    try {
+        const url = new URL(ALERT_WEBHOOK_URL);
+        const req = https.request({
+            hostname: url.hostname, path: url.pathname + url.search, method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+        });
+        req.on('error', (e) => console.error('Webhook failed:', e.message));
+        req.write(payload);
+        req.end();
+    } catch(e) { console.error("Webhook Error", e); }
+}
+
+// --- 1. GLOBAL SAFETY NET ---
+process.on('uncaughtException', (err) => {
+  console.error('PREVENTED CRASH (Uncaught Exception):', err.message);
+  sendSecurityAlert('Uncaught Exception', 'Internal', err.message);
+});
 process.on('unhandledRejection', (reason, promise) => {
   console.error('PREVENTED CRASH (Unhandled Rejection):', reason);
 });
 
 // --- VALIDATION HELPERS ---
 function isValidEmail(email) {
-  if (!email || email.trim() === '') return true; // Allow empty
+  if (!email || typeof email !== 'string' || email.trim() === '') return true; 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(String(email).toLowerCase());
 }
 
 function isValidUrl(url) {
-  if (!url || url.trim() === '') return true; // Allow empty
-  // Must start with http:// or https://
+  if (!url || typeof url !== 'string' || url.trim() === '') return true; 
   if (url.startsWith('http://') || url.startsWith('https://')) {
-    try {
-      new URL(url); // Check if it's a valid URL structure
-      return true;
-    } catch (_) {
-      return false;
-    }
+    try { new URL(url); return true; } catch (_) { return false; }
   }
   return false;
 }
 
-// Helper to synchronously assign entry IDs
-function ensureEntryIdsSync() {
-  // Wrapped in try-catch just in case FS fails on startup
-  try {
-    if (!fs.existsSync(submissionsDir)) {
-        fs.mkdirSync(submissionsDir, { recursive: true });
-    }
-    const files = fs.readdirSync(submissionsDir);
-    const presentIds = new Set();
-    files.forEach((fname) => {
-      if (!fname.endsWith('.json')) return;
-      const fpath = path.join(submissionsDir, fname);
-      try {
-        const raw = fs.readFileSync(fpath, 'utf8');
-        const sub = JSON.parse(raw);
-        if (sub.entryId) presentIds.add(sub.entryId);
-      } catch (_) {}
-    });
-    files.forEach((fname) => {
-      if (!fname.endsWith('.json')) return;
-      const fpath = path.join(submissionsDir, fname);
-      try {
-        const raw = fs.readFileSync(fpath, 'utf8');
-        const sub = JSON.parse(raw);
-        if (!sub.entryId) {
-          let newId;
-          do {
-            newId = Math.floor(10000000 + Math.random() * 90000000).toString();
-          } while (presentIds.has(newId));
-          presentIds.add(newId);
-          sub.entryId = newId;
-          fs.writeFileSync(fpath, JSON.stringify(sub, null, 2));
-        }
-      } catch (_) {}
-    });
-  } catch (err) {
-    console.error('Failed to synchronise entry IDs:', err);
-  }
-}
+// Ensure directory exists
+try { if (!fs.existsSync(submissionsDir)) fs.mkdirSync(submissionsDir, { recursive: true }); } catch (e) {}
 
-// Ensure directory exists safely
-try {
-    if (!fs.existsSync(submissionsDir)) {
-        fs.mkdirSync(submissionsDir, { recursive: true });
-    }
-} catch (e) {
-    console.error("Error creating submission dir:", e);
-}
 
-ensureEntryIdsSync();
+// --- SECURITY HELPER: STRICT HEADERS ---
+function setSecurityHeaders(res) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';");
+    
+    // FUN HEADERS
+    res.removeHeader('X-Powered-By');
+    res.setHeader('Server', SERVER_NAME); 
+    res.setHeader('X-Server-Mood', 'Invincible');
+    res.setHeader('X-Traps', 'Deployed');
+}
 
 function sendJson(res, statusCode, data) {
-  try {
-    // Prevent "headers already sent" crashes
-    if (res.headersSent) return;
-    
-    res.writeHead(statusCode, {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-    });
-    res.end(JSON.stringify(data));
-  } catch (e) {
-      console.error("Error sending JSON:", e.message);
-  }
+  if (res.headersSent) return;
+  setSecurityHeaders(res); 
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': 'http://localhost:3000', 
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  });
+  res.end(JSON.stringify(data));
 }
+
+// --- SECURITY HELPER: RATE LIMITER ---
+function checkRateLimit(req) {
+    const ip = req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    let client = ipRequestCounts.get(ip);
+    if (!client) {
+        client = { count: 1, startTime: now };
+        ipRequestCounts.set(ip, client);
+        return true;
+    }
+    if (now - client.startTime > RATE_LIMIT_WINDOW) {
+        client.count = 1;
+        client.startTime = now;
+        return true;
+    }
+    client.count++;
+    if (client.count > RATE_LIMIT_MAX) {
+        if (client.count === RATE_LIMIT_MAX + 1) sendSecurityAlert('Rate Limit Exceeded', ip, `User exceeded ${RATE_LIMIT_MAX} reqs/min`);
+        return false; 
+    }
+    return true;
+}
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, client] of ipRequestCounts.entries()) {
+        if (now - client.startTime > RATE_LIMIT_WINDOW) ipRequestCounts.delete(ip);
+    }
+}, RATE_LIMIT_WINDOW);
+
+
+// --- SECURITY HELPER: INPUT SANITIZER ---
+function sanitizeSubmission(sub) {
+    const MAX_TEXT = 2000; 
+    const MAX_LONG_TEXT = 5000; 
+    if (!sub.data) return false;
+    
+    // TYPE ARMOR: Ensure 'data' is actually an object
+    if (typeof sub.data !== 'object' || Array.isArray(sub.data)) return false;
+
+    for (const key in sub.data) {
+        const val = sub.data[key];
+        // TYPE ARMOR: If they send an array/object where a string belongs, kill it.
+        // We only expect strings, booleans, or specific arrays (members)
+        if (key === 'consortiumMembers') {
+             if (!Array.isArray(val)) sub.data[key] = []; // Enforce array
+        } else if (typeof val === 'object' && val !== null) {
+             // If they send { "email": { "foo": "bar" } }, sanitize it to empty string
+             sub.data[key] = "";
+        } else if (typeof val === 'string') {
+            if (key.includes('Motivation') || key.includes('Biography') || key.includes('Experience')) {
+                if (val.length > MAX_LONG_TEXT) sub.data[key] = val.substring(0, MAX_LONG_TEXT);
+            } else {
+                if (val.length > MAX_TEXT) sub.data[key] = val.substring(0, MAX_TEXT);
+            }
+        }
+    }
+    return true;
+}
+
 
 function handleEditSubmission(res, submission) {
-  const now = Date.now();
-  // Enforce Start time and Deadline for Edits as well
-  if (now < REGISTRATION_START) {
-    return sendJson(res, 403, { error: 'Editing is not allowed before registration starts.' });
-  }
-  if (now > REGISTRATION_DEADLINE) {
-    return sendJson(res, 403, { error: 'Registration is closed. No further edits allowed.' });
-  }
+    const now = Date.now();
+    if (now < REGISTRATION_START) return sendJson(res, 403, { error: 'Not started' });
+    if (now > REGISTRATION_DEADLINE) return sendJson(res, 403, { error: 'Closed' });
 
-  const { entryId, editToken } = submission;
+    const { entryId, editToken } = submission;
 
-  fs.readdir(submissionsDir, (err, files) => {
-    if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
-
-    let fileFound = false;
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue;
-      const filePath = path.join(submissionsDir, file);
-      try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        const storedSub = JSON.parse(content);
-
-        if (storedSub.entryId === entryId) {
-          fileFound = true;
-          if (storedSub.editToken === editToken) {
-            submission.editToken = storedSub.editToken;
-            submission.entryId = storedSub.entryId;
-            submission.submittedAt = storedSub.submittedAt; 
-            submission.userId = storedSub.userId; 
-
-            fs.writeFileSync(filePath, JSON.stringify(submission, null, 2));
-            return sendJson(res, 200, { status: 'ok', message: 'Submission updated' });
-          } else {
-            return sendJson(res, 403, { error: 'Invalid edit token' });
-          }
-        }
-      } catch (err) {}
+    // TYPE ARMOR: Ensure entryId and editToken are STRINGS
+    if (typeof entryId !== 'string' || typeof editToken !== 'string') {
+        return sendJson(res, 400, { error: 'Invalid credential format' });
     }
-    if (!fileFound) return sendJson(res, 404, { error: 'Submission not found' });
-  });
+
+    fs.readdir(submissionsDir, (err, files) => {
+        if (err) return sendJson(res, 500, { error: 'Storage error' });
+        let fileFound = false;
+        for (const file of files) {
+            if (!file.endsWith('.json')) continue;
+            const filePath = path.join(submissionsDir, file);
+            try {
+                const storedSub = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                if (storedSub.entryId === entryId) {
+                    fileFound = true;
+                    if (storedSub.editToken === editToken) {
+                        submission.editToken = storedSub.editToken; 
+                        fs.writeFileSync(filePath, JSON.stringify(submission, null, 2));
+                        return sendJson(res, 200, { status: 'ok' });
+                    } else {
+                        sendSecurityAlert('Invalid Edit Token', 'Unknown', `Attempted edit on ${entryId}`);
+                        return sendJson(res, 403, { error: 'Invalid edit token' });
+                    }
+                }
+            } catch (e) {}
+        }
+        if (!fileFound) return sendJson(res, 404, { error: 'Not found' });
+    });
 }
 
+
 const server = http.createServer((req, res) => {
-  // --- 2. REQUEST HANDLER WRAPPER ---
-  // This catches malformed URLs (like %) and other synchronous logic errors
+  const ip = req.socket.remoteAddress || 'unknown';
+
   try {
-      
-    // Catch scanner disconnects specifically
     req.on('error', (err) => console.error('Req error:', err.message));
     res.on('error', (err) => console.error('Res error:', err.message));
 
+    // 2. RATE LIMIT CHECK
+    if (!checkRateLimit(req)) {
+        res.writeHead(429, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end(BLOCK_MESSAGE);
+    }
+
+    // 3. SAFE URL DECODING
+    const rawUrl = req.url || '/';
+    let reqPath;
+    try {
+        reqPath = decodeURIComponent(rawUrl.split('?')[0]);
+    } catch (e) {
+        console.warn('Malformed request URL:', rawUrl);
+        sendSecurityAlert('Malformed URL Attack', ip, `Raw URL: ${rawUrl}`);
+        res.writeHead(418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end(BLOCK_MESSAGE);
+    }
+
+    // --- 8. HONEYPOT TRAP ---
+    // If they touch a trap file, redirect them to Rick Roll
+    if (HONEYPOTS.some(trap => reqPath.toLowerCase().startsWith(trap))) {
+        console.log(`🍯 HONEYPOT TRIGGERED by ${ip} on ${reqPath}`);
+        sendSecurityAlert('Honeypot Triggered', ip, `Trap: ${reqPath}`);
+        res.writeHead(307, { 'Location': RICK_ROLL_URL });
+        return res.end();
+    }
+
+    // 4. STRICT METHOD CHECKING
+    if (!['GET', 'POST', 'OPTIONS', 'HEAD'].includes(req.method)) {
+        res.writeHead(405, { 'Allow': 'GET, POST, OPTIONS', 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end(BLOCK_MESSAGE);
+    }
+
     if (req.method === 'OPTIONS') {
+        setSecurityHeaders(res);
         res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': 'http://localhost:3000', 
+            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
         });
         return res.end();
     }
 
-    // --- 3. SAFE URL DECODING (IMPROVED) ---
-    // Uses colleague's logic: Split query string FIRST, then decode.
-    // This prevents crashes from malformed characters inside the query string.
-    const rawUrl = req.url || '/';
-    let reqPath;
-
-    try {
-        // Safely decode and strip query string
-        reqPath = decodeURIComponent(rawUrl.split('?')[0]);
-    } catch (e) {
-        console.warn('Malformed request URL, ignoring:', rawUrl, e.message);
-        res.writeHead(400, { 'Content-Type': 'text/plain' });
-        return res.end('Bad Request');
-    }
-
-    // API: Submit
+    // 5. API ROUTING
     if (reqPath === '/api/submit' && req.method === 'POST') {
         const now = Date.now();
-        // 1. Check Start time and Deadline FIRST
-        if (now < REGISTRATION_START) {
-            return sendJson(res, 403, { error: 'Registration has not started yet.' });
-        }
-        if (now > REGISTRATION_DEADLINE) {
-        return sendJson(res, 403, { error: 'Registration is closed for new submissions.' });
-        }
+        if (now < REGISTRATION_START) return sendJson(res, 403, { error: 'Not started' });
+        if (now > REGISTRATION_DEADLINE) return sendJson(res, 403, { error: 'Closed' });
 
         let body = '';
         req.on('data', (chunk) => { 
-            body += chunk; 
-            // Safety: Kill giant requests
-            if(body.length > 1e6) req.destroy();
+            body += chunk;
+            if (body.length > 1e6) { 
+                req.destroy(); 
+                sendSecurityAlert('Large Payload Blocked', ip, 'Body size exceeded 1MB');
+            }
         });
         req.on('end', () => {
-        try {
-            const submission = JSON.parse(body);
-            if (!submission || !submission.applicationType || !submission.submittedAt || !submission.data) {
-            return sendJson(res, 400, { error: 'Invalid submission format' });
-            }
-
-            // --- START SERVER-SIDE VALIDATION ---
-            const data = submission.data;
-            let validationError = null;
-
-            if (submission.applicationType === 'Individual') {
-                if (!isValidEmail(data.email)) validationError = 'Invalid contact email format.';
-                if (!isValidUrl(data.socialProfile)) validationError = 'Invalid social profile URL. Must start with http:// or https://';
-                if (!data.proofOfLifeExempt && data.proofOfLifeLink && !isValidUrl(data.proofOfLifeLink)) validationError = 'Invalid Proof-of-Life URL. Must start with http:// or https://';
-            } 
-            else if (submission.applicationType === 'Organization') {
-                if (!isValidEmail(data.contactEmail)) validationError = 'Invalid contact email format.';
-                if (!data.orgProofOfLifeExempt && data.orgProofOfLifeLink && !isValidUrl(data.orgProofOfLifeLink)) validationError = 'Invalid Proof-of-Life URL. Must start with http:// or https://';
-            }
-            else if (submission.applicationType === 'Consortium') {
-                if (!isValidEmail(data.consortiumContactEmail)) validationError = 'Invalid contact email format.';
-                if (!data.consortiumProofOfLifeExempt && data.consortiumProofOfLifeLink && !isValidUrl(data.consortiumProofOfLifeLink)) validationError = 'Invalid Proof-of-Life URL. Must start with http:// or https://';
-                
-                if (data.consortiumMembers && Array.isArray(data.consortiumMembers)) {
-                    for (const member of data.consortiumMembers) {
-                        if (!isValidUrl(member.socialProfile)) {
-                            validationError = `Invalid social profile URL for member ${member.name || ''}. Must start with http:// or https://`;
-                            break;
-                        }
-                    }
+            try {
+                const submission = JSON.parse(body);
+                if (!sanitizeSubmission(submission)) {
+                    // Sanitizer returns false if data structure is invalid/polluted
+                    return sendJson(res, 400, { error: 'Invalid data structure' });
                 }
-            }
 
-            if (validationError) {
-                return sendJson(res, 400, { error: validationError });
-            }
-            // --- END SERVER-SIDE VALIDATION ---
+                if (!submission || !submission.applicationType || !submission.data) return sendJson(res, 400, { error: 'Invalid format' });
 
-            if (submission.entryId && submission.editToken) {
-            handleEditSubmission(res, submission);
-            } else {
-            // New Submission logic
-            if (!submission.entryId) {
-                submission.entryId = Math.floor(10000000 + Math.random() * 90000000).toString();
-            }
-            const editToken = crypto.randomBytes(16).toString('hex');
-            submission.editToken = editToken;
-            const timestamp = Date.now();
-            const filename = path.join(submissionsDir, `${timestamp}.json`);
-            
-            fs.writeFile(filename, JSON.stringify(submission, null, 2), (err) => {
-                if (err) {
-                console.error('Failed to write submission:', err);
-                return sendJson(res, 500, { error: 'Failed to store submission' });
+                if (submission.entryId && submission.editToken) {
+                    handleEditSubmission(res, submission);
+                } else {
+                    const editToken = crypto.randomBytes(16).toString('hex');
+                    submission.entryId = submission.entryId || Math.floor(10000000 + Math.random() * 90000000).toString();
+                    submission.editToken = editToken;
+                    fs.writeFileSync(path.join(submissionsDir, `${Date.now()}.json`), JSON.stringify(submission, null, 2));
+                    sendJson(res, 200, { status: 'ok', entryId: submission.entryId, editToken });
                 }
-                sendJson(res, 200, { status: 'ok', entryId: submission.entryId, editToken: editToken });
-            });
+            } catch (err) {
+                sendJson(res, 400, { error: 'Invalid JSON' });
             }
-        } catch (err) {
-            sendJson(res, 400, { error: 'Invalid JSON payload' });
-        }
         });
-        return;
+        return; 
     }
-
-    // API: DELETE SUBMISSION
+    
+    // API: DELETE
     if (reqPath === '/api/delete' && req.method === 'POST') {
-        const now = Date.now();
-        // 1. Check Start time and Deadline
-        if (now < REGISTRATION_START) {
-            return sendJson(res, 403, { error: 'Deletion is not allowed before registration starts.' });
-        }
-        if (now > REGISTRATION_DEADLINE) {
-        return sendJson(res, 403, { error: 'Registration is closed. Deletion is not allowed.' });
-        }
-
         let body = '';
-        req.on('data', (chunk) => { body += chunk; });
+        req.on('data', (chunk) => { body += chunk; if(body.length > 1000) req.destroy(); }); 
         req.on('end', () => {
-        try {
-            const { entryId, editToken } = JSON.parse(body);
-            if (!entryId || !editToken) {
-            return sendJson(res, 400, { error: 'Entry ID and Token are required.' });
-            }
-
-            fs.readdir(submissionsDir, (err, files) => {
-            if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
-
-            let fileFound = false;
-            for (const file of files) {
-                if (!file.endsWith('.json')) continue;
-                const filePath = path.join(submissionsDir, file);
-                try {
-                const content = fs.readFileSync(filePath, 'utf8');
-                const storedSub = JSON.parse(content);
-
-                if (storedSub.entryId === entryId) {
-                    fileFound = true;
-                    if (storedSub.editToken === editToken) {
-                    // Valid token, proceed with deletion
-                    fs.unlink(filePath, (unlinkErr) => {
-                        if (unlinkErr) {
-                        console.error('Failed to delete file:', unlinkErr);
-        
-                        return sendJson(res, 500, { error: 'Failed to delete submission file.' });
-                        }
-                        return sendJson(res, 200, { status: 'ok', message: 'Submission deleted' });
-                    });
-                    return; // Exit loop after starting delete
-                    } else {
-                    return sendJson(res, 403, { error: 'Invalid edit token' });
+            try {
+                const { entryId, editToken } = JSON.parse(body);
+                // TYPE ARMOR: Check types
+                if (typeof entryId !== 'string' || typeof editToken !== 'string') return sendJson(res, 400, { error: 'Invalid credentials' });
+                
+                 fs.readdir(submissionsDir, (err, files) => {
+                    if (err) return sendJson(res, 500, { error: 'Failed' });
+                    for (const file of files) {
+                        if (!file.endsWith('.json')) continue;
+                        try {
+                            const fp = path.join(submissionsDir, file);
+                            const sub = JSON.parse(fs.readFileSync(fp));
+                            if (sub.entryId === entryId && sub.editToken === editToken) {
+                                fs.unlinkSync(fp);
+                                return sendJson(res, 200, { status: 'ok' });
+                            }
+                        } catch(e){}
                     }
-                }
-                } catch (readErr) {
-                console.error('Error reading submission file:', readErr);
-                }
-            }
-            if (!fileFound) return sendJson(res, 404, { error: 'Submission not found' });
-            });
-
-        } catch (err) {
-            sendJson(res, 400, { error: 'Invalid JSON payload' });
-        }
+                    sendJson(res, 404, { error: 'Not found' });
+                 });
+            } catch (e) { sendJson(res, 400, { error: 'Bad Request' }); }
         });
         return;
     }
+    
+    // API: LIST
+    if (reqPath === '/api/applications' && req.method === 'GET') {
+         fs.readdir(submissionsDir, (err, files) => {
+            if(err) return sendJson(res, 500, {error: 'Error'});
+            const apps = [];
+            files.forEach(f => { 
+                try {
+                    const c = JSON.parse(fs.readFileSync(path.join(submissionsDir, f)));
+                    if(c.data) { delete c.data.email; delete c.data.contactEmail; } 
+                    apps.push(c);
+                } catch(e){} 
+            });
+            sendJson(res, 200, apps);
+         });
+         return;
+    }
 
-
-    // API: LOOKUP BY TOKEN
+    // API: LOOKUP
     if (reqPath === '/api/lookup' && req.method === 'POST') {
         let body = '';
         req.on('data', (chunk) => { body += chunk; });
         req.on('end', () => {
-        try {
-            const { token } = JSON.parse(body);
-            if (!token) return sendJson(res, 400, { error: 'Token required' });
-
-            // Check if lookup/editing is allowed
-            if (Date.now() < REGISTRATION_START) {
-                return sendJson(res, 403, { error: 'Editing is not allowed before registration starts.' });
-            }
-
-            fs.readdir(submissionsDir, (err, files) => {
-            if (err) return sendJson(res, 500, { error: 'Storage error' });
-
-            for (const file of files) {
-                if (!file.endsWith('.json')) continue;
-                try {
-                const content = fs.readFileSync(path.join(submissionsDir, file), 'utf8');
-                const sub = JSON.parse(content);
-                if (sub.editToken === token) {
-                    return sendJson(res, 200, sub);
-                }
-                } catch (e) {}
-            }
-            sendJson(res, 404, { error: 'Invalid token or submission not found' });
-            });
-        } catch (e) {
-            sendJson(res, 400, { error: 'Invalid request' });
-        }
-        });
-        return;
-    }
-
-    // API: List
-    if (reqPath === '/api/applications' && req.method === 'GET') {
-        fs.readdir(submissionsDir, (err, files) => {
-        if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
-        const applications = [];
-        files
-            .filter((file) => file.endsWith('.json'))
-            .forEach((file) => {
             try {
-                const content = fs.readFileSync(path.join(submissionsDir, file), 'utf8');
-                const submission = JSON.parse(content);
-                const { editToken, ...safeSubmission } = submission;
-                // Clean up potentially sensitive fields for public list display
-                if (safeSubmission.data) {
-                    delete safeSubmission.data.email;
-                    delete safeSubmission.data.contactEmail;
-                    delete safeSubmission.data.proofOfLifeLink;
-                    delete safeSubmission.data.orgProofOfLifeLink;
-                    delete safeSubmission.data.consortiumProofOfLifeLink;
-                }
-                applications.push(safeSubmission);
-            } catch (err) {}
-            });
-        applications.sort((a, b) => b.submittedAt - a.submittedAt);
-        sendJson(res, 200, applications);
+                const payload = JSON.parse(body);
+                const token = payload.token;
+                
+                if (typeof token !== 'string' || !token) return sendJson(res, 400, {error:'Invalid token'});
+
+                fs.readdir(submissionsDir, (err, files) => {
+                    for(const f of files) {
+                        if(!f.endsWith('.json')) continue;
+                        try {
+                            const sub = JSON.parse(fs.readFileSync(path.join(submissionsDir, f)));
+                            if(sub.editToken === token) return sendJson(res, 200, sub);
+                        } catch(e){}
+                    }
+                    sendJson(res, 404, {error: 'Not found'});
+                });
+            } catch(e) { sendJson(res, 400, {error: 'Invalid JSON'}); }
         });
         return;
     }
 
-    // API: Get One
+    // API: GET ONE
     if (reqPath.startsWith('/api/applications/') && req.method === 'GET') {
-        const urlParts = reqPath.split('?')[0].split('/');
-        const entryId = urlParts[urlParts.length - 1];
-
+        const parts = reqPath.split('/');
+        const id = parts[parts.length - 1];
         fs.readdir(submissionsDir, (err, files) => {
-        if (err) return sendJson(res, 500, { error: 'Failed to load submissions' });
-        for (const file of files) {
-            if (!file.endsWith('.json')) continue;
-            try {
-            const content = fs.readFileSync(path.join(submissionsDir, file), 'utf8');
-            const submission = JSON.parse(content);
-            if (submission.entryId === entryId || submission.id === entryId) {
-                const { editToken, ...safeSubmission } = submission;
-                // On the *detail* page, we DO show the PoL link AND email.
-                // No fields are deleted here.
-                return sendJson(res, 200, safeSubmission);
+            for(const f of files) {
+                if(!f.endsWith('.json')) continue;
+                try {
+                    const sub = JSON.parse(fs.readFileSync(path.join(submissionsDir, f)));
+                    if(sub.entryId === id) return sendJson(res, 200, sub);
+                } catch(e){}
             }
-            } catch (err) {}
-        }
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not Found' }));
+            sendJson(res, 404, {error: 'Not found'});
         });
         return;
     }
 
-    // --- STATIC FILE SERVING & ROUTING ---
-    
-    // PATH TRAVERSAL PROTECTION
-    // Normalize the path to resolve '..' and '.' 
-    // And ensure the request is actually decoding to a valid string
+    // 6. STATIC FILE SERVING
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { 'Allow': 'GET', 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end(BLOCK_MESSAGE);
+    }
+
     if (reqPath.endsWith('/')) reqPath = reqPath.slice(0, -1);
-    
-    let subPath = null;
     let filePath;
-    
-    // 1. Handle /ccsnap prefix for HTML pages (Routes)
-    if (reqPath === '/ccsnap') {
-        filePath = path.join(ROOT, 'index.html');
-    } else if (reqPath.startsWith('/ccsnap')) {
-        subPath = reqPath.slice('/ccsnap'.length);
-        if (subPath === '/register') {
-        filePath = path.join(ROOT, 'register.html');
-        } else if (subPath === '/candidates') {
-        filePath = path.join(ROOT, 'candidates.html');
-        } else if (subPath.startsWith('/candidates/')) {
-        filePath = path.join(ROOT, 'candidate.html');
-        } else if (subPath.startsWith('/')) {
-            // This handles assets requested *with* the prefix, e.g., /ccsnap/styles.css
-            filePath = path.join(ROOT, subPath.slice(1));
-        } else {
-        filePath = path.join(ROOT, subPath);
-        }
-    } 
-    
-    // 2. Handle root assets requested without prefix (e.g., /styles.css, /app.js)
-    // This is the fallback for assets linked using the root-relative path (e.g. <link href="/styles.css">)
-    if (!filePath) {
-        const ext = path.extname(reqPath);
-        // Check for common asset extensions or assume it's a file if it looks like one
-        if (ext === '.css' || ext === '.js' || ext === '.html' || ext === '.png' || reqPath === '/app.js' || reqPath === '/styles.css') {
+
+    if (reqPath === '/ccsnap') filePath = path.join(ROOT, 'index.html');
+    else if (reqPath.startsWith('/ccsnap')) {
+        let subPath = reqPath.slice('/ccsnap'.length);
+        if (subPath === '/register') filePath = path.join(ROOT, 'register.html');
+        else if (subPath === '/candidates') filePath = path.join(ROOT, 'candidates.html');
+        else if (subPath.startsWith('/candidates/')) filePath = path.join(ROOT, 'candidate.html');
+        else filePath = path.join(ROOT, subPath);
+    } else {
+         const ext = path.extname(reqPath);
+         if (['.css','.js','.html','.png'].includes(ext) || reqPath === '/app.js' || reqPath === '/styles.css') {
             filePath = path.join(ROOT, reqPath.startsWith('/') ? reqPath.slice(1) : reqPath);
-        } else if (reqPath === '' || reqPath === '/') {
-            // Serve index.html if request is simply root /
-            filePath = path.join(ROOT, 'index.html');
-        }
+         } else if (reqPath === '' || reqPath === '/') {
+           filePath = path.join(ROOT, 'index.html');
+         }
     }
 
-    // Security Check: Ensure filePath is still inside ROOT (Traversal Check)
+    // TRAVERSAL CHECK
     if (filePath && !filePath.startsWith(ROOT)) {
-        console.warn(`Blocked traversal attempt: ${filePath}`);
-        res.writeHead(403);
-        return res.end('Forbidden');
+        sendSecurityAlert('Path Traversal Attempt', ip, `Tried to access: ${filePath}`);
+        res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end(BLOCK_MESSAGE);
     }
 
     if (!filePath) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.writeHead(404);
         return res.end('Not Found');
     }
 
     fs.readFile(filePath, (err, data) => {
         if (err) {
-            // Log error but don't expose details to client
-            // console.error(`Error reading file ${filePath}:`, err.code);
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.writeHead(404);
             return res.end('Not Found');
         }
+        setSecurityHeaders(res);
         const ext = path.extname(filePath);
         let contentType = 'text/html';
         if (ext === '.js') contentType = 'application/javascript';
         if (ext === '.css') contentType = 'text/css';
         if (ext === '.png') contentType = 'image/png';
-        res.writeHead(200, { 'Content-Type': contentType, 'Access-Control-Allow-Origin': '*' });
+        res.writeHead(200, { 'Content-Type': contentType });
         res.end(data);
     });
 
-  } catch (mainError) {
-      // This catches any synchronous error inside the request loop
-      console.error("CRITICAL REQUEST ERROR:", mainError);
-      try {
-          res.writeHead(500);
-          res.end("Server Error");
-      } catch (e) {
-          // Connection probably closed already
-      }
+  } catch (e) {
+      console.error("CRITICAL:", e);
+      sendSecurityAlert('Sync Request Error', ip, e.message);
+      if(!res.headersSent) { res.writeHead(500); res.end("Server Error"); }
   }
 });
 
+// --- 7. SLOWLORIS PROTECTION ---
+server.headersTimeout = 5000; 
+server.requestTimeout = 10000; 
+server.keepAliveTimeout = 5000; 
+
 server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`
+  🛡️  THE IRON DOME IS ACTIVE 🛡️
+  --------------------------------
+  Server running at http://localhost:${PORT}
+  Honeypots: Armed
+  Attitude: Sassy
+  --------------------------------
+  `);
 });
