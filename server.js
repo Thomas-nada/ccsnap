@@ -331,53 +331,30 @@ function fetchVotingPower(stakeAddress, action, epochOverride) {
                         return resolve("0");
                     }
                     let drepId = null;
+                    let delegatedPower = "0";
                     try {
                         const drepList = JSON.parse(lookupBody);
                         const match = drepList.find(d => d.stake_address === stakeAddress);
-                        if (match) drepId = match.drep_id;
+                        if (match) {
+                            drepId = match.drep_id;
+                            delegatedPower = extractDRepPower(match);
+                        }
                     } catch (e) {
                         console.error("DRep Lookup Parse Error:", e, "Raw Body:", lookupBody.substring(0, 80));
                     }
 
                     if (!drepId) return resolve("0");
 
-                    const powerUrl = `https://api.koios.rest/api/v1/governance/drep_info`;
-                    const powerPayload = JSON.stringify({ drep_ids: [drepId] });
+                    // If Koios already provided the delegation total, use it immediately.
+                    if (delegatedPower !== "0") return resolve(delegatedPower);
 
-                    const powerReq = https.request(powerUrl, {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json', 
-                            'Content-Length': Buffer.byteLength(powerPayload) 
-                        },
-                        timeout: 8000
-                    }, (powerRes) => {
-                        let powerBody = '';
-                        powerRes.on('data', chunk => powerBody += chunk);
-                        powerRes.on('end', () => {
-                            if (powerRes.statusCode !== 200) {
-                                console.error(`DRep Power Lookup Failed (Status ${powerRes.statusCode}):`, powerBody.substring(0, 80));
-                                return resolve("0");
-                            }
-                            try {
-                                const drepInfo = JSON.parse(powerBody);
-                                const drepRecord = Array.isArray(drepInfo) && drepInfo.length > 0 ? drepInfo[0] : null;
-                                const power = drepRecord ? (drepRecord.voting_power || "0") : "0";
-                                resolve(power);
-                            } catch (e) {
-                                console.error("DRep Power Parse Error:", e, "Raw Body:", powerBody.substring(0, 80));
-                                resolve("0");
-                            }
+                    // Fallback: aggregate delegations for the DRep to derive total voting power
+                    fetchDRepDelegatedPower(drepId)
+                        .then(resolve)
+                        .catch((err) => {
+                            console.error("DRep Delegation Aggregation Failed:", err);
+                            resolve("0");
                         });
-                    });
-
-                    powerReq.on('error', (e) => {
-                        console.error("DRep Power Req Error:", e);
-                        resolve("0");
-                    });
-
-                    powerReq.write(powerPayload);
-                    powerReq.end();
                 });
             });
 
@@ -479,6 +456,79 @@ function fetchVotingPower(stakeAddress, action, epochOverride) {
 
         proxyReq.write(koiosPayload);
         proxyReq.end();
+    });
+}
+
+// Attempt to pluck a delegation power field off a Koios DRep record
+function extractDRepPower(record) {
+    const powerKeys = [
+        'total_voting_power',
+        'voting_power',
+        'active_voting_power',
+        'active_vote_power'
+    ];
+
+    for (const key of powerKeys) {
+        if (record && record[key] !== undefined && record[key] !== null) {
+            const num = Number(record[key]);
+            if (!Number.isNaN(num) && num >= 0) return num.toString();
+        }
+    }
+    return "0";
+}
+
+// Sum the delegation amounts for a DRep using Koios delegator listing
+function fetchDRepDelegatedPower(drepId) {
+    return new Promise((resolve) => {
+        const powerUrl = `https://api.koios.rest/api/v1/governance/drep_delegators`;
+        const powerPayload = JSON.stringify({ drep_ids: [drepId] });
+
+        const powerReq = https.request(powerUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(powerPayload)
+            },
+            timeout: 8000
+        }, (powerRes) => {
+            let powerBody = '';
+            powerRes.on('data', chunk => powerBody += chunk);
+            powerRes.on('end', () => {
+                if (powerRes.statusCode !== 200) {
+                    console.error(`DRep Delegator Lookup Failed (Status ${powerRes.statusCode}):`, powerBody.substring(0, 80));
+                    return resolve("0");
+                }
+
+                try {
+                    const delegators = JSON.parse(powerBody);
+                    if (!Array.isArray(delegators) || delegators.length === 0) return resolve("0");
+
+                    const total = delegators.reduce((sum, delegator) => {
+                        const powerKeys = ['amount', 'voting_power', 'delegated_amount', 'delegated_voting_power'];
+                        for (const key of powerKeys) {
+                            const value = Number(delegator[key]);
+                            if (!Number.isNaN(value) && value > 0) {
+                                return sum + value;
+                            }
+                        }
+                        return sum;
+                    }, 0);
+
+                    return resolve(total.toString());
+                } catch (e) {
+                    console.error("DRep Delegation Parse Error:", e, "Raw Body:", powerBody.substring(0, 80));
+                    return resolve("0");
+                }
+            });
+        });
+
+        powerReq.on('error', (e) => {
+            console.error("DRep Delegation Req Error:", e);
+            resolve("0");
+        });
+
+        powerReq.write(powerPayload);
+        powerReq.end();
     });
 }
 

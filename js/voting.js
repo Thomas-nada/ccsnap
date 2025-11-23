@@ -314,7 +314,7 @@ async function performWalletConnection(walletKey, isSilent) {
         }
 
         let finalVotingPower = 0;
-        let powerSource = VOTING_MODE === 'DREP_POWER' ? 'DRep Power' : 'ADA Balance';
+        let powerSource = VOTING_MODE === 'DREP_POWER' ? 'Total Delegation' : 'ADA Balance';
 
         try {
             const payload = { _stake_addresses: [koiosStakeAddr] };
