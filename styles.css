@@ -321,15 +321,16 @@ form .helper-text {
 /* Candidate cards on candidates page */
 .applications-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  /* FORCED FIX: Explicitly define two columns, making the layout much more compact */
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem; 
 }
 
 .candidate-card {
   background-color: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1rem; /* REDUCED padding */
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: all 0.2s ease;
@@ -364,14 +365,15 @@ form .helper-text {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-dark);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.1rem; /* REDUCED margin */
 }
 .candidate-type {
-  font-size: 0.85rem;
+  font-size: 0.8rem; /* SLIGHTLY REDUCED font size */
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
+  margin-bottom: 0.5rem; 
 }
 
 .candidate-id {
@@ -476,7 +478,7 @@ form .helper-text {
 /* Buttons */
 .btn {
   display: inline-block;
-  padding: 0.6rem 1.25rem;
+  padding: 0.5rem 1.25rem; /* REDUCED vertical padding (from 0.6rem) */
   border: none;
   border-radius: 8px;
   background: var(--btn-gradient);
@@ -662,4 +664,134 @@ form .helper-text {
     border-radius: 8px;
     margin-bottom: 1.5rem;
     text-align: center;
+}
+
+/* --- NEW: Placeholder Styles for Vote and Results --- */
+#voting-placeholder, 
+#results-placeholder {
+  text-align: center;
+  margin-top: 2rem;
+  padding: 3rem;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background-color: var(--surface-alt);
+  color: var(--text-muted);
+}
+#voting-placeholder h4, 
+#results-placeholder h4 {
+  margin-top: 0;
+  color: var(--text-muted);
+}
+#results-placeholder .icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+/* --- NEW: Wallet Details Table (Replicating WalletDetails.tsx) --- */
+.wallet-details-container {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.wallet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.wallet-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.wallet-table tr:last-child td {
+  border-bottom: none;
+}
+
+.wallet-table .label-cell {
+  font-weight: 700;
+  width: 30%;
+  color: var(--primary-dark);
+  background-color: var(--surface-alt);
+}
+
+.wallet-table .value-cell {
+  color: var(--text-dark);
+  word-break: break-all; /* Important for long hashes */
+}
+
+/* Specific style for the Results table (tighter rows) */
+.results-table td, 
+.results-table th {
+    padding: 0.75rem 1rem;
+}
+
+.wallet-icon {
+  width: 24px;
+  height: 24px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+/* Vote Button Styles */
+.btn-vote:hover {
+    transform: scale(1.02);
+}
+
+/* --- Audit Log Styles --- */
+.audit-line {
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+}
+.audit-line.info { color: #e2e8f0; }
+.audit-line.success { color: #4ade80; }
+.audit-line.warning { color: #facc15; }
+.audit-line.error { color: #f87171; }
+.audit-line.header { 
+    color: #38bdf8; 
+    font-weight: 700; 
+    margin-top: 1rem; 
+    border-bottom: 1px dashed #38bdf8; 
+    padding-bottom: 0.25rem; 
+}
+.audit-line.data { color: #94a3b8; padding-left: 1rem; }
+
+.audit-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.audit-badge.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.audit-badge.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+/* --- New CLI Styles --- */
+.cli-box {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.5rem;
+}
+.cli-input-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+.cli-power-badge {
+    background-color: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
 }
