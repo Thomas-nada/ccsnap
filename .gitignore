@@ -1,8 +1,0 @@
-Dependency folder installed by npm
-/node_modules
-
-Directory containing sensitive candidate data
-/submissions
-
-Logs
-npm-debug.log .DS_Store
