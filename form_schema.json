@@ -1,0 +1,138 @@
+{
+  "Individual": {
+    "title": "Individual Candidate Application",
+    "steps": [
+      {
+        "name": "Step 1: Basics",
+        "fields": [
+          {"id": "fullName", "label": "Full Name / Alias", "type": "text", "required": true},
+          {"id": "email", "label": "Contact Email (Public)", "type": "email", "required": true, "helper": "This email will be public for contact purposes."},
+          {"id": "geographicRep", "label": "Geographic Representation (Optional)", "type": "text", "required": false},
+          {"id": "stakeId", "label": "Stake ID (Optional)", "type": "text", "required": false, "helper": "e.g., stake1... (Not required, but recommended)"},
+          {"id": "DRepId", "label": "DRep ID (Optional)", "type": "text", "required": false, "helper": "The ID of the DRep you control (if applicable)."},
+          {"id": "socialProfile", "label": "Social Profile Link (Optional)", "type": "url", "required": false, "helper": "e.g., X/Twitter, LinkedIn, or personal website."},
+          {
+            "id": "previousApplicant", 
+            "label": "I was a candidate in a previous CC Election (Check to skip Proof-of-Life video).", 
+            "type": "checkbox", 
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "Step 2: Proof-of-Life Video",
+        "fields": [
+          {
+            "id": "proofOfLifeLink", 
+            "label": "Public Proof-of-Life Video URL", 
+            "type": "url", 
+            "required": false,
+            "helper": "Provide a publicly accessible link to your video (e.g., YouTube, cloud link). This is required unless exempted in Step 1."
+          }
+        ]
+      },
+      {
+        "name": "Step 3: Biography and Conflict of Interest",
+        "fields": [
+          {"id": "biography", "label": "Biography", "type": "textarea", "required": true, "maxLength": 500, "rows": 4, "helper": "Describe yourself and your background (Max 500 characters)."},
+          {"id": "conflictOfInterest", "label": "Conflict of Interest Statement (Optional)", "type": "textarea", "required": false, "rows": 3, "helper": "Disclose any potential conflicts (Max 500 characters)."}
+        ]
+      },
+      {
+        "name": "Step 4: Platform",
+        "fields": [
+          {"id": "motivation", "label": "Motivation for Applying", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5, "helper": "Why do you want to be a CC member? (Max 1000 characters)."},
+          {"id": "experience", "label": "Relevant Experience", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5, "helper": "Detail your experience with Cardano Governance or relevant fields."},
+          {"id": "transparencyApproach", "label": "Transparency Approach", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5, "helper": "How will you commit to openness and accountability?"}
+        ]
+      }
+    ]
+  },
+  "Organization": {
+    "title": "Organisation Candidate Application",
+    "steps": [
+      {
+        "name": "Step 1: Basics",
+        "fields": [
+          {"id": "orgName", "label": "Organisation Name", "type": "text", "required": true},
+          {"id": "contactPerson", "label": "Contact Person Full Name", "type": "text", "required": true},
+          {"id": "contactEmail", "label": "Contact Email (Public)", "type": "email", "required": true, "helper": "This email will be public for contact purposes."},
+          {"id": "orgDescription", "label": "Organisation Description", "type": "textarea", "required": true, "maxLength": 500, "rows": 4, "helper": "Describe your organisation's mission (Max 500 characters)."},
+          {"id": "orgConflictOfInterest", "label": "Conflict of Interest Statement (Optional)", "type": "textarea", "required": false, "rows": 3, "helper": "Disclose any potential conflicts (Max 500 characters)."},
+          {
+            "id": "previousApplicant", 
+            "label": "We were an Organisation candidate in a previous CC Election (Check to skip Proof-of-Life video).", 
+            "type": "checkbox", 
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "Step 2: Proof-of-Life Video",
+        "fields": [
+          {
+            "id": "orgProofOfLifeLink", 
+            "label": "Public Proof-of-Life Video URL", 
+            "type": "url", 
+            "required": false,
+            "helper": "Provide a publicly accessible link to your video. This is required unless exempted in Step 1."
+          }
+        ]
+      },
+      {
+        "name": "Step 3: Platform",
+        "fields": [
+          {"id": "orgMotivation", "label": "Motivation for Applying", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5},
+          {"id": "orgExperience", "label": "Relevant Experience", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5},
+          {"id": "orgTransparencyApproach", "label": "Transparency Approach", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5}
+        ]
+      }
+    ]
+  },
+  "Consortium": {
+    "title": "Consortium Candidate Application",
+    "steps": [
+      {
+        "name": "Step 1: Basics",
+        "fields": [
+          {"id": "consortiumName", "label": "Consortium Name", "type": "text", "required": true},
+          {"id": "consortiumContactPerson", "label": "Contact Person Full Name", "type": "text", "required": true},
+          {"id": "consortiumContactEmail", "label": "Contact Email (Public)", "type": "email", "required": true},
+          {"id": "consortiumMission", "label": "Consortium Mission (Optional)", "type": "textarea", "required": false, "maxLength": 500, "rows": 3},
+          {"id": "consortiumValues", "label": "Consortium Values (Optional)", "type": "textarea", "required": false, "maxLength": 500, "rows": 3},
+          {
+            "id": "previousApplicant", 
+            "label": "At least 50% of our consortium were candidates in a previous CC Election (Check to skip Proof-of-Life video).", 
+            "type": "checkbox", 
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "Step 2: Proof-of-Life Video",
+        "fields": [
+          {
+            "id": "consortiumProofOfLifeLink", 
+            "label": "Public Proof-of-Life Video URL", 
+            "type": "url", 
+            "required": false,
+            "helper": "Provide a publicly accessible link to the Contact Person's video. This is required unless exempted in Step 1."
+          }
+        ]
+      },
+      {
+        "name": "Step 3: Platform",
+        "fields": [
+          {"id": "consortiumMotivation", "label": "Motivation for Applying", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5},
+          {"id": "consortiumExperience", "label": "Relevant Experience", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5},
+          {"id": "consortiumTransparencyApproach", "label": "Transparency Approach", "type": "textarea", "required": true, "maxLength": 1000, "rows": 5}
+        ]
+      },
+      {
+        "name": "Step 4: Consortium Members",
+        "type": "custom_members_list",
+        "fields": []
+      }
+    ]
+  }
+}

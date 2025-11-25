@@ -1,0 +1,27 @@
+{
+  "_README": [
+    "--- CONFIGURATION MANUAL ---",
+    "1. votingType: 'drep' or 'ada'",
+    "2. network: 'mainnet', 'preprod', or 'preview'",
+    "3. minVotingPower: MUST BE IN LOVELACE (Integers Only)",
+    "4. electionName: The title displayed on the dashboard",
+    "5. FEATURE FLAGS: Set showRegister, showVote, showResults to true/false to toggle visibility.",
+    "6. MIN/MAX Votes: minVotes and maxVotes define the range of candidates a user must/can vote for (Multi-Candidate Voting).",
+    "7. PRODUCTION NOTE: For production, critical settings like PORT, RATE_LIMIT_MAX, and RICK_ROLL_URL should be set via Environment Variables (ENV) for security and deployment management. The ENV variables will override these JSON values if set in the server environment.",
+    "8. SAVE and RESTART server (node server.js) to apply."
+  ],
+  "registrationStart": 1763330000000,
+  "registrationDeadline": 1766534400000,
+  "votingStart": 1761480000000,
+  "votingEnd": 1766534400000,
+  "snapshotEpoch": 540,
+  "votingType": "ada",    
+  "network": "mainnet",     
+  "minVotingPower": 1,
+  "minVotes": 1,
+  "maxVotes": 10,
+  "electionName": "CC Snoop Election 2025",
+  "showRegister": true,
+  "showVote": true,
+  "showResults": true
+}

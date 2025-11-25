@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CC Snap Election Portal – Register</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+
+  <body>
+    <div class="site-header">
+      <div class="site-header-inner">
+        <h1 class="site-title">CC Snap Election Portal</h1>
+      </div>
+    </div>
+
+    <div class="container">
+      <header>
+        <h2>Register</h2>
+        <p class="subtitle">Submit your candidacy as an individual, organisation or consortium.</p>
+      </header>
+
+      <nav class="top-nav">
+        <a href="/ccsnap">Guide</a>
+        <a href="/ccsnap/register" class="active">Register</a>
+        <a href="/ccsnap/candidates">Candidates</a>
+        <a href="/ccsnap/vote">Vote</a>
+        <a href="/ccsnap/results">Results</a>
+      </nav>
+
+      <!-- Edit Mode Banner (Toggled by app.js) -->
+      <div id="edit-banner" class="edit-banner hidden">
+        <strong>You are editing an existing submission.</strong><br>
+        After saving, your changes will be live immediately.
+      </div>
+
+      <nav id="form-switch" class="form-switch">
+        <button id="btn-individual" data-type="Individual">Individual</button>
+        <button id="btn-organization" data-type="Organization">Organisation</button>
+        <button id="btn-consortium" data-type="Consortium">Consortium</button>
+      </nav>
+
+      <!-- Manual Edit Trigger Section -->
+      <div style="text-align: center; margin-bottom: 1.5rem; margin-top: 0.5rem;">
+        <button id="btn-show-edit-input" type="button" class="btn secondary" style="font-size: 0.85rem; background-color: transparent; color: var(--text-muted); border: 1px solid var(--border);">
+          Have an edit token?
+        </button>
+      </div>
+
+      <!-- Manual Edit Input Form (Hidden by default) -->
+      <div id="manual-edit-container" class="guide hidden" style="max-width: 500px; margin: 0 auto 2rem auto;">
+        <h3 style="margin-top: 0;">Load Submission</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Enter your Secret Token to edit your submission.
+        </p>
+        <!-- Removed Entry ID Input -->
+        <div class="form-group">
+          <label for="manual-edit-token">Secret Token</label>
+          <input type="text" id="manual-edit-token" placeholder="Paste your token here">
+        </div>
+        <!-- THIS IS THE FIX: Added margin-top to the button -->
+        <button id="btn-load-manual-edit" type="button" class="btn" style="width: 100%; margin-top: 1rem;">Load for Editing</button>
+      </div>
+
+      <div id="messages" class="messages"></div>
+
+      <!-- Form Container (Populated by app.js) -->
+      <form id="application-form" novalidate></form>
+
+      <!-- Success/Info Modal -->
+      <div id="success-modal" class="modal-overlay hidden">
+        <div class="modal-content success-modal-content"></div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal-overlay hidden">
+      <div class="modal-content" style="border-top: 6px solid #dc2626;">
+        <div class="modal-header">
+          <h3 style="color: #dc2626;">Confirm Deletion</h3>
+          <button id="btn-delete-cancel-top" class="modal-close" aria-label="Close">×</button>
+        </div>
+        <p>Are you sure you want to permanently delete your submission? This action cannot be undone.</p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+          <button id="btn-delete-cancel" type="button" class="btn secondary">Cancel</button>
+          <button id="btn-delete-confirm" type="button" class="btn" style="background: #dc2626; border-color: #dc2626;">Delete Submission</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
