@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@emurgo/cardano-serialization-lib-nodejs": "^15.0.3",
+    "blakejs": "^1.2.1",
+    "cbor": "^10.0.11",
+    "express": "^5.1.0",
+    "sqlite3": "^5.1.7"
+  }
+}
